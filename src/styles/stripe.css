@@ -1,0 +1,90 @@
+:root {
+  --bg: #f6f8fb;
+  --card: #ffffff;
+  --border: rgba(15, 23, 42, 0.08);
+
+  --text: #0f172a;
+  --muted: #64748b;
+
+  --primary: #635bff;
+  --success: #12b76a;
+  --warning: #f79009;
+  --danger: #f04438;
+
+  --radius: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* GRID SYSTEM */
+.grid {
+  display: grid;
+  gap: 16px;
+}
+
+.grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.grid-2 {
+  grid-template-columns: 2fr 1fr;
+}
+
+/* STRIPE CARD */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  transition: all 0.18s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+/* TYPOGRAPHY */
+.h1 {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.sub {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* KPI */
+.kpi {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* BADGE */
+.badge {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(99, 91, 255, 0.08);
+  color: var(--primary);
+}
