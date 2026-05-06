@@ -1,14 +1,5 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import CaseSensitivePathsPlugin from 'case-sensitive-paths-webpack-plugin'
-
-export default defineConfig({
-  plugins: [
-    react(),
-    {
-      ...CaseSensitivePathsPlugin(),
-      apply: 'serve',
-    }
-  ]
-})
-
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite"
+}
