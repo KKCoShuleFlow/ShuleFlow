@@ -1,5 +1,5 @@
-import Sidebar from "../components/navigation/Sidebar"
-import Topbar from "../components/navigation/Topbar"
+import Sidebar from "./navigation/Sidebar"
+import Topbar from "./navigation/Topbar"
 import { Outlet } from "react-router-dom"
 
 export default function Layout() {

@@ -2,8 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Optional: smoother fonts + better defaults */
+/* optional */
 body {
   @apply bg-gray-100 text-gray-800;
-  font-family: system-ui, -apple-system, sans-serif;
 }
