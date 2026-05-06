@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import AIQuickChat from "../topbar/AIQuickchat";
+import AIQuickChat from "../topbar/AIQuickChat.jsx";
 
 /* ---------------- HELPERS ---------------- */
 
