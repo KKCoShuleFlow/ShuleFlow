@@ -1,16 +1,8 @@
 import { useEffect, useState } from "react"
-import AIQuickChat from "../topbar/AIQuickChat.jsx";
+import { useAuth } from "../../context/AuthContext"
+import { logout } from "../../lib/auth"
 
 /* ---------------- HELPERS ---------------- */
-
-function getInitials(name = "") {
-  return name
-    .split(" ")
-    .map(n => n[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase()
-}
 
 function getColor(status) {
   if (status === "critical") return "#ef4444"
@@ -18,7 +10,7 @@ function getColor(status) {
   return "#22c55e"
 }
 
-/* ---------------- COMPONENTS ---------------- */
+/* ---------------- SMALL COMPONENTS ---------------- */
 
 function StatusDot({ status }) {
   return (
@@ -43,9 +35,13 @@ function Icon({ label }) {
 export default function Topbar() {
   const [time, setTime] = useState("")
   const [status, setStatus] = useState("stable")
+  const [open, setOpen] = useState(false)
 
-  const user = {
-    name: "Kevin Karanja", // 🔥 later: from DB / auth
+  const { user, profile } = useAuth()
+
+  const handleLogout = async () => {
+    await logout()
+    window.location.href = "/login"
   }
 
   useEffect(() => {
@@ -67,6 +63,7 @@ export default function Topbar() {
 
   return (
     <div style={styles.wrapper}>
+      
       {/* LEFT */}
       <div style={styles.left}>
         <div style={styles.search}>
@@ -88,12 +85,66 @@ export default function Topbar() {
 
         <div style={styles.divider} />
 
-        {/* 🔥 HERO TIME */}
+        {/* TIME */}
         <div style={styles.time}>{time}</div>
 
         {/* PROFILE */}
-        <div style={styles.profile}>
-          {getInitials(user.name)}
+        <div style={{ position: "relative" }}>
+
+          {/* AVATAR */}
+          <div
+            onClick={() => setOpen(!open)}
+            style={styles.avatar}
+          >
+            {user?.email?.[0]?.toUpperCase() || "U"}
+          </div>
+
+          {/* DROPDOWN */}
+             {open && (
+  <div style={styles.dropdown}>
+
+    {/* HEADER */}
+    <div style={styles.header}>
+      <div style={styles.avatar}>
+        {user?.email?.[0]?.toUpperCase() || "U"}
+      </div>
+
+      <div>
+        <div style={styles.email}>
+          {user?.email}
+        </div>
+
+        <div style={styles.role}>
+          {profile?.role || "user"}
+        </div>
+      </div>
+    </div>
+
+    {/* CLEAN ACTIONS */}
+    <div style={styles.actions}>
+
+      <div style={styles.item}>
+        ⚙️ Profile Settings
+      </div>
+
+      <div style={styles.item}>
+        🔐 Security & Permissions
+      </div>
+
+      <div style={styles.item}>
+        🧠 AI Preferences
+      </div>
+
+    </div>
+
+    {/* FOOTER */}
+    <div onClick={handleLogout} style={styles.logout}>
+      Logout
+    </div>
+
+  </div>
+)}
+
         </div>
       </div>
     </div>
@@ -107,38 +158,18 @@ const styles = {
     height: 60,
     margin: "10px 16px",
     padding: "0 18px",
-
     display: "grid",
     gridTemplateColumns: "1fr auto 1fr",
     alignItems: "center",
-
     borderRadius: 16,
-
     background: "linear-gradient(135deg, #0f172a, #1e293b)",
     boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
     border: "1px solid rgba(255,255,255,0.08)",
-
-    backdropFilter: "blur(12px)",
   },
 
-  left: {
-    display: "flex",
-    alignItems: "center",
-  },
-
-  center: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    justifyContent: "center",
-  },
-
-  right: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    gap: 12,
-  },
+  left: { display: "flex", alignItems: "center" },
+  center: { display: "flex", alignItems: "center", gap: 8, justifyContent: "center" },
+  right: { display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12 },
 
   search: {
     background: "rgba(255,255,255,0.05)",
@@ -146,7 +177,6 @@ const styles = {
     borderRadius: 10,
     fontSize: 12,
     color: "#cbd5f5",
-    border: "1px solid rgba(255,255,255,0.08)",
   },
 
   kbd: {
@@ -154,14 +184,12 @@ const styles = {
     padding: "2px 6px",
     borderRadius: 6,
     background: "rgba(255,255,255,0.08)",
-    fontSize: 11,
   },
 
   status: {
     fontSize: 12,
-    color: "#e2e8f0",
     fontWeight: 700,
-    letterSpacing: 0.5,
+    color: "#e2e8f0",
   },
 
   icon: {
@@ -169,7 +197,6 @@ const styles = {
     borderRadius: 8,
     background: "rgba(255,255,255,0.05)",
     cursor: "pointer",
-    fontSize: 14,
   },
 
   divider: {
@@ -181,23 +208,97 @@ const styles = {
   time: {
     fontSize: 18,
     fontWeight: 900,
-    letterSpacing: 1,
     color: "#38bdf8",
     fontFamily: "monospace",
-    textShadow: "0 0 10px rgba(56,189,248,0.6)",
   },
 
-  profile: {
-    width: 30,
-    height: 30,
+  avatar: {
+    cursor: "pointer",
+    background: "#3b82f6",
+    color: "white",
     borderRadius: "50%",
-    background: "#020617",
+    width: 36,
+    height: 36,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 12,
-    fontWeight: 800,
-    border: "1px solid rgba(255,255,255,0.1)",
-    color: "#fff",
+    fontWeight: 900,
   },
+
+  dropdown: {
+  position: "absolute",
+  right: 0,
+  top: 50,
+  width: 240,
+  padding: 14,
+
+  background: "rgba(255,255,255,0.92)",
+  backdropFilter: "blur(16px)",
+  borderRadius: 16,
+
+  boxShadow: "0 20px 50px rgba(0,0,0,0.15)",
+  border: "1px solid rgba(0,0,0,0.06)",
+  fontFamily: "system-ui",
+},
+
+header: {
+  display: "flex",
+  gap: 10,
+  alignItems: "center",
+  marginBottom: 12
+},
+
+avatar: {
+  width: 40,
+  height: 40,
+  borderRadius: "50%",
+  background: "linear-gradient(135deg, #3b82f6, #60a5fa)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontWeight: 800,
+  color: "white"
+},
+
+email: {
+  fontSize: 13,
+  fontWeight: 700,
+  color: "#0f172a",
+  wordBreak: "break-word"
+},
+
+role: {
+  fontSize: 11,
+  color: "#64748b",
+  marginTop: 2
+},
+
+actions: {
+  display: "flex",
+  flexDirection: "column",
+  gap: 6,
+  paddingTop: 6,
+  paddingBottom: 10
+},
+
+item: {
+  padding: "8px 10px",
+  borderRadius: 10,
+  fontSize: 13,
+  color: "#0f172a",
+  cursor: "pointer",
+  transition: "0.2s",
+  background: "transparent"
+},
+
+logout: {
+  marginTop: 6,
+  padding: "8px 10px",
+  borderRadius: 10,
+  fontSize: 13,
+  fontWeight: 700,
+  color: "#ef4444",
+  cursor: "pointer",
+  background: "#fff1f2"
+},
 }

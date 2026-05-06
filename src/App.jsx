@@ -1,12 +1,13 @@
 import { Routes, Route } from "react-router-dom"
 import Layout from "./components/Layout"
+import ProtectedRoute from "./components/ProtectedRoute"
 
 // PAGES
+import Login from "./pages/Login"
 import HomeDashboard from "./pages/HomeDashboard"
 import StudentsDashboard from "./pages/StudentsDashboard"
 import StudentsList from "./pages/StudentsList"
 import StudentDetail from "./pages/StudentDetail"
-
 import FeesDashboard from "./pages/FeesDashboard"
 import AttendanceDashboard from "./pages/AttendanceDashboard"
 import AlertsDashboard from "./pages/AlertsDashboard"
@@ -20,9 +21,18 @@ export default function App() {
   return (
     <Routes>
 
-      {/* APP SHELL (LAYOUT WRAPS EVERYTHING) */}
-      <Route element={<Layout />}>
-        
+      {/* 🔐 LOGIN (NO LAYOUT) */}
+      <Route path="/login" element={<Login />} />
+
+      {/* 🔒 PROTECTED APP */}
+      <Route
+        element={
+          <ProtectedRoute>
+            <Layout />
+          </ProtectedRoute>
+        }
+      >
+
         <Route path="/" element={<HomeDashboard />} />
 
         <Route path="/students" element={<StudentsDashboard />} />
@@ -34,8 +44,18 @@ export default function App() {
         <Route path="/alerts" element={<AlertsDashboard />} />
         <Route path="/reports" element={<ReportsDashboard />} />
         <Route path="/insights" element={<InsightsDashboard />} />
+        
 
-        <Route path="/system" element={<SystemhealthDashboard />} />
+        {/* 🔐 ADMIN ONLY */}
+        <Route
+          path="/system"
+          element={
+            <ProtectedRoute role="admin">
+              <SystemhealthDashboard />
+            </ProtectedRoute>
+          }
+        />
+
         <Route path="/sync" element={<SyncStatusDashboard />} />
         <Route path="/settings" element={<SettingsDashboard />} />
 
@@ -44,15 +64,3 @@ export default function App() {
     </Routes>
   )
 }
-
-
-
-
-
-
-
-
-
-
-
-

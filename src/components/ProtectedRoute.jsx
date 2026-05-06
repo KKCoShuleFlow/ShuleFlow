@@ -1,20 +1,18 @@
-import { useEffect, useState } from "react"
-import { supabase } from "../lib/supabase"
+import { Navigate, Outlet } from "react-router-dom"
+import { useAuth } from "../context/AuthContext"
 
-export default function ProtectedRoute({ children }) {
-  const [user, setUser] = useState(null)
+export default function ProtectedRoute({ role, children }) {
+  const { user, profile, loading } = useAuth()
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) {
-        window.location.href = "/login"
-      } else {
-        setUser(data.user)
-      }
-    })
-  }, [])
+  if (loading) return <div>Loading...</div>
 
-  if (!user) return <div>Loading...</div>
+  if (!user) {
+    return <Navigate to="/login" replace />
+  }
 
-  return children
+  if (role && profile?.role !== role) {
+    return <div>🚫 Access denied</div>
+  }
+
+  return children ? children : <Outlet />
 }

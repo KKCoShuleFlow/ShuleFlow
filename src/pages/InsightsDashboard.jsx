@@ -1,178 +1,168 @@
 import { useEffect, useState } from "react"
-import { db } from "../db"
 import { runIntelligence } from "../lib/intelligence/engine"
 
 export default function InsightsDashboard() {
-  const [state, setState] = useState(null)
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  const load = async () => {
+    try {
+      const res = await runIntelligence()
+
+      if (!res) {
+        setError("AI engine failed to generate insights")
+        return
+      }
+
+      setData(res)
+      setError(null)
+    } catch (err) {
+      console.error(err)
+      setError("Something went wrong")
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    let alive = true
+    load()
 
-    const run = async () => {
-      const students = await db.students.toArray()
-      const fees = await db.fees.toArray()
-      const attendance = await db.attendance.toArray()
+    const t = setInterval(load, 4000) // 🔥 live refresh
 
-      const result = runIntelligence(
-        students || [],
-        fees || [],
-        attendance || []
-      )
-
-      if (alive) setState(result)
-    }
-
-    run()
-    const t = setInterval(run, 4000)
-
-    return () => {
-      alive = false
-      clearInterval(t)
-    }
+    return () => clearInterval(t)
   }, [])
 
-  if (!state) {
+  if (loading) {
     return (
       <div style={styles.loading}>
-        🧠 Initializing multi-agent intelligence layer...
+        🧠 Booting Intelligence Engine...
       </div>
     )
   }
 
-  const { metrics, trends, prediction, systemState, systemInsight, agents } =
-    state
+  if (error) {
+    return (
+      <div style={styles.error}>
+        ⚠️ {error}
+      </div>
+    )
+  }
 
   return (
     <div style={styles.wrapper}>
 
       {/* HEADER */}
-      <Header systemState={systemState} />
+      <div style={styles.header}>
+        <div style={styles.title}>
+          🧠 INTELLIGENCE CORE
+        </div>
+        <div style={styles.subtitle}>
+          Real-time system reasoning & predictive insights
+        </div>
+      </div>
 
-      {/* TOP SIGNAL GRID */}
+      {/* KPIs */}
       <div style={styles.grid}>
-        <Card label="Revenue Health" value={metrics.revenueHealth} />
-        <Card label="Avg Risk" value={metrics.avgRisk} />
-        <Card label="Attendance" value={metrics.attendanceRate} />
-        <Card label="System State" value={systemState} highlight />
+
+        <Card
+          label="Total Students"
+          value={data.totalStudents}
+        />
+
+        <Card
+          label="High Risk"
+          value={data.highRisk.length}
+          color="#ef4444"
+        />
+
+        <Card
+          label="Total Debt"
+          value={"$" + data.totalDebt}
+          color="#f59e0b"
+        />
+
       </div>
 
-      {/* AGENTS PANEL */}
-      <div style={styles.section}>
-        <Title>🧠 Active Intelligence Agents</Title>
+      {/* MAIN GRID */}
+      <div style={styles.main}>
 
-        <div style={styles.agentGrid}>
-          {agents?.map((a, i) => (
-            <AgentCard key={i} agent={a} />
+        {/* LEFT */}
+        <Panel title="🔴 High Risk Students">
+          {data.highRisk.length === 0 && (
+            <div style={styles.empty}>
+              No high-risk students 🎉
+            </div>
+          )}
+
+          {data.highRisk.map((s, i) => (
+            <StudentRow key={i} s={s} />
           ))}
+        </Panel>
+
+        {/* RIGHT */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+          <Panel title="🧠 AI Insight">
+            <div style={styles.text}>
+              {data.insight}
+            </div>
+          </Panel>
+
+          <Panel title="🎯 Recommended Actions">
+            <ul style={styles.list}>
+              {data.actions.map((a, i) => (
+                <li key={i}>→ {a}</li>
+              ))}
+            </ul>
+          </Panel>
+
         </div>
+
       </div>
 
-      {/* TRENDS */}
-      <div style={styles.section}>
-        <Title>📈 System Trends</Title>
-
-        <div style={styles.row}>
-          <Trend label="Revenue" value={trends.revenueTrend} />
-          <Trend label="Risk" value={trends.riskTrend} />
-          <Trend label="Attendance" value={trends.attendanceTrend} />
-        </div>
-      </div>
-
-      {/* PREDICTION ENGINE */}
-      <div style={styles.section}>
-        <Title>🔮 Forecast (14-day projection)</Title>
-
-        <div style={styles.forecastBox}>
-          <div>Risk → {prediction.risk}/100</div>
-          <div>Revenue → {prediction.revenue}/100</div>
-          <div>Attendance → {prediction.attendance}/100</div>
-        </div>
-      </div>
-
-      {/* SYSTEM INSIGHT (CORE VALUE) */}
-      <div style={styles.insightBox}>
-        <div style={{ fontWeight: 900, marginBottom: 6 }}>
-          🧠 System Insight
-        </div>
-        <div style={{ lineHeight: 1.6 }}>{systemInsight}</div>
-      </div>
     </div>
   )
 }
 
-/* ---------------- HEADER ---------------- */
+/* ---------------- UI COMPONENTS ---------------- */
 
-function Header({ systemState }) {
-  const color =
-    systemState === "critical"
-      ? "#ef4444"
-      : systemState === "warning"
-      ? "#f59e0b"
-      : "#22c55e"
-
+function Card({ label, value, color = "#38bdf8" }) {
   return (
-    <div style={styles.header}>
-      <div style={{ fontSize: 22, fontWeight: 900 }}>
-        🧠 INSIGHTS CONTROL CENTER
-      </div>
-
-      <div style={{ color, fontWeight: 700, marginTop: 4 }}>
-        System State: {systemState.toUpperCase()}
-      </div>
-    </div>
-  )
-}
-
-/* ---------------- CARDS ---------------- */
-
-function Card({ label, value, highlight }) {
-  return (
-    <div style={{ ...styles.card, borderColor: highlight ? "#60a5fa" : "#1f2937" }}>
+    <div style={styles.card}>
       <div style={styles.cardLabel}>{label}</div>
-      <div style={styles.cardValue}>{value}</div>
+      <div style={{ ...styles.cardValue, color }}>{value}</div>
     </div>
   )
 }
 
-/* ---------------- AGENT CARD ---------------- */
-
-function AgentCard({ agent }) {
-  const color =
-    agent.state === "critical"
-      ? "#ef4444"
-      : agent.state === "warning"
-      ? "#f59e0b"
-      : "#22c55e"
-
+function Panel({ title, children }) {
   return (
-    <div style={styles.agentCard}>
-      <div style={{ fontWeight: 800 }}>{agent.name}</div>
-
-      <div style={{ color, marginTop: 4, fontSize: 13 }}>
-        {agent.state.toUpperCase()}
-      </div>
-
-      <div style={{ fontSize: 12, marginTop: 6, opacity: 0.8 }}>
-        {agent.signal}
-      </div>
+    <div style={styles.panel}>
+      <div style={styles.panelTitle}>{title}</div>
+      {children}
     </div>
   )
 }
 
-/* ---------------- TREND ---------------- */
-
-function Trend({ label, value }) {
+function StudentRow({ s }) {
   const color =
-    value === "improving"
-      ? "#22c55e"
-      : value === "declining"
-      ? "#ef4444"
-      : "#94a3b8"
+    s.risk > 80 ? "#ef4444" :
+    s.risk > 50 ? "#f59e0b" :
+    "#22c55e"
 
   return (
-    <div style={styles.trend}>
-      <div style={{ fontSize: 12 }}>{label}</div>
-      <div style={{ color, fontWeight: 800 }}>{value}</div>
+    <div style={styles.row}>
+      <div>
+        <div style={styles.name}>{s.name}</div>
+        <div style={styles.sub}>
+          Balance: ${s.balance}
+        </div>
+      </div>
+
+      <div style={{ ...styles.risk, color }}>
+        {s.risk}%
+      </div>
     </div>
   )
 }
@@ -181,45 +171,59 @@ function Trend({ label, value }) {
 
 const styles = {
   wrapper: {
-    padding: 24,
+    padding: 20,
     background: "#050816",
     minHeight: "100vh",
     color: "white",
+    fontFamily: "Inter",
   },
 
   loading: {
     padding: 24,
+    color: "#60a5fa",
     background: "#050816",
-    color: "#93c5fd",
     minHeight: "100vh",
+  },
+
+  error: {
+    padding: 24,
+    color: "#ef4444",
+    background: "#050816",
   },
 
   header: {
     marginBottom: 16,
     borderBottom: "1px solid rgba(255,255,255,0.08)",
-    paddingBottom: 12,
+    paddingBottom: 10,
+  },
+
+  title: {
+    fontSize: 22,
+    fontWeight: 900,
+  },
+
+  subtitle: {
+    fontSize: 12,
+    opacity: 0.6,
   },
 
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
+    gridTemplateColumns: "repeat(3, 1fr)",
     gap: 12,
-  },
-
-  section: {
-    marginTop: 18,
+    marginTop: 12,
   },
 
   card: {
     background: "#0f172a",
-    border: "1px solid #1f2937",
     padding: 14,
     borderRadius: 14,
+    border: "1px solid rgba(255,255,255,0.08)",
   },
 
   cardLabel: {
     fontSize: 11,
-    opacity: 0.7,
+    opacity: 0.6,
   },
 
   cardValue: {
@@ -228,51 +232,65 @@ const styles = {
     marginTop: 6,
   },
 
-  agentGrid: {
+  main: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, 1fr)",
-    gap: 12,
+    gridTemplateColumns: "2fr 1fr",
+    gap: 14,
+    marginTop: 16,
   },
 
-  agentCard: {
+  panel: {
     background: "#0f172a",
-    border: "1px solid #1f2937",
-    padding: 12,
-    borderRadius: 12,
+    borderRadius: 14,
+    padding: 14,
+    border: "1px solid rgba(255,255,255,0.08)",
+  },
+
+  panelTitle: {
+    fontSize: 12,
+    fontWeight: 800,
+    marginBottom: 10,
+  },
+
+  text: {
+    fontSize: 13,
+    lineHeight: 1.6,
+  },
+
+  list: {
+    fontSize: 13,
+    lineHeight: 1.8,
   },
 
   row: {
     display: "flex",
-    gap: 12,
+    justifyContent: "space-between",
+    padding: 10,
+    marginBottom: 8,
+    borderRadius: 10,
+    background: "rgba(255,255,255,0.03)",
   },
 
-  trend: {
-    background: "#0f172a",
-    padding: 12,
-    borderRadius: 12,
-    flex: 1,
-    border: "1px solid #1f2937",
+  name: {
+    fontWeight: 700,
   },
 
-  forecastBox: {
-    background: "#0f172a",
-    padding: 14,
-    borderRadius: 14,
-    border: "1px solid #1f2937",
-    lineHeight: 1.8,
+  sub: {
+    fontSize: 11,
+    opacity: 0.6,
   },
 
-  insightBox: {
-    marginTop: 18,
-    background: "rgba(59,130,246,0.08)",
-    border: "1px solid rgba(59,130,246,0.3)",
-    padding: 14,
-    borderRadius: 14,
+  risk: {
+    fontWeight: 900,
+  },
+
+  empty: {
+    fontSize: 13,
+    opacity: 0.6,
   },
 }
 
-function Title({ children }) {
-  return (
-    <div style={{ fontWeight: 800, marginBottom: 10 }}>{children}</div>
-  )
-}
+
+
+
+

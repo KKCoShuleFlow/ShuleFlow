@@ -246,7 +246,7 @@
 
 
 import { useEffect, useState } from "react"
-import { db } from "../db"
+import { db } from "../db/index"
 
 export default function StudentsDashboard() {
   const [data, setData] = useState(null)

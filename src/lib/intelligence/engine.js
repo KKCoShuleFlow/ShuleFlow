@@ -8,40 +8,74 @@ import { detectTrends } from "./trends"
 import { forecast } from "./forecast"
 import { explainSystem } from "./explain"
 import { Memory } from "./memory"
+import { supabase } from "../supabase"
 
 const memory = new Memory()
 
-export function runIntelligence(students, fees, attendance) {
-  // base system
-  const metrics = computeMetrics(students, fees, attendance)
-  const trends = detectTrends(memory.getHistory())
-  const prediction = forecast(metrics, trends)
+export async function runIntelligence() {
+  const { data: students, error: sErr } = await supabase
+    .from("students")
+    .select("*")
 
-  // 🧠 NEW: multi-agent layer
-  const finance = financeAgent(fees)
-  const student = studentAgent(students, fees)
-  const attendanceAI = attendanceAgent(attendance)
+  const { data: fees, error: fErr } = await supabase
+    .from("fees")
+    .select("*")
 
-  const consensus = reconcileAgents([
-    finance,
-    student,
-    attendanceAI
-  ])
-
-  const insight = explainSystem(metrics, trends, prediction)
-
-  const snapshot = {
-    timestamp: Date.now(),
-    metrics,
-    trends,
-    prediction,
-    insight,
-    agents: consensus.agents,
-    systemState: consensus.globalState,
-    systemInsight: consensus.insight
+  if (sErr || fErr) {
+    console.error("AI engine failed", sErr || fErr)
+    return null
   }
 
-  memory.save(snapshot)
+  return buildInsights(students, fees)
+}
 
-  return snapshot
+/* ---------------- REAL ENGINE ---------------- */
+
+function buildInsights(students, fees) {
+  let highRisk = []
+  let totalDebt = 0
+
+  students.forEach(s => {
+    const sFees = fees.filter(f => f.student_id === s.id)
+
+    const expected = sFees.reduce((a, f) => a + Number(f.amount || 0), 0)
+    const paid = sFees.reduce((a, f) => a + Number(f.paid || 0), 0)
+
+    const balance = expected - paid
+    const risk = expected ? (balance / expected) * 100 : 0
+
+    totalDebt += balance
+
+    if (risk > 60) {
+      highRisk.push({
+        ...s,
+        risk: Math.round(risk),
+        balance
+      })
+    }
+  })
+
+  let insight = ""
+  let actions = []
+
+  if (highRisk.length > 0) {
+    insight = `${highRisk.length} students are at financial risk. Immediate intervention recommended.`
+
+    actions = [
+      "Contact high-risk parents",
+      "Offer payment plans",
+      "Monitor weekly"
+    ]
+  } else {
+    insight = "System stable. No high-risk students detected."
+    actions = ["Maintain monitoring"]
+  }
+
+  return {
+    totalStudents: students.length,
+    highRisk,
+    totalDebt,
+    insight,
+    actions
+  }
 }
