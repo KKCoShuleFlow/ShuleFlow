@@ -1,36 +1,46 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom"
+import { Routes, Route } from "react-router-dom"
 import Layout from "./app/layout"
 
-import StudentsList from "./pages/StudentsList"
-import StudentDetail from "./pages/StudentDetail"
-import AdminDashboard from "./pages/AdminDashboard"
-import ProtectedRoute from "./components/ProtectedRoute"
-
+// PAGES
 import HomeDashboard from "./pages/HomeDashboard"
 import StudentsDashboard from "./pages/StudentsDashboard"
+import StudentsList from "./pages/StudentsList"
+import StudentDetail from "./pages/StudentDetail"
+
+import FeesDashboard from "./pages/FeesDashboard"
+import AttendanceDashboard from "./pages/AttendanceDashboard"
+import AlertsDashboard from "./pages/AlertsDashboard"
+import ReportsDashboard from "./pages/ReportsDashboard"
+import InsightsDashboard from "./pages/InsightsDashboard"
+import SystemhealthDashboard from "./pages/SystemhealthDashboard"
+import SyncStatusDashboard from "./pages/SyncStatusDashboard"
+import SettingsDashboard from "./pages/SettingsDashboard"
 
 export default function App() {
   return (
-    <BrowserRouter>
-               <Routes>
-  <Route element={<Layout />}>
-    <Route path="/" element={<HomeDashboard />} />
-    
-    {/* ADD THIS LINE BELOW */}
-    <Route path="/students/dashboard" element={<StudentsDashboard />} /> 
-    
-    <Route path="/students" element={<StudentsList />} />
-    <Route path="/students/:id" element={<StudentDetail />} />
-    <Route path="/students-dashboard" element={<StudentsDashboard />} />
+    <Routes>
 
-    <Route path="/admin" element={
-      <ProtectedRoute>
-        <AdminDashboard />
-      </ProtectedRoute>
-    } />
-  </Route>
-</Routes>
+      {/* APP SHELL (LAYOUT WRAPS EVERYTHING) */}
+      <Route element={<Layout />}>
+        
+        <Route path="/" element={<HomeDashboard />} />
 
-    </BrowserRouter>
+        <Route path="/students" element={<StudentsDashboard />} />
+        <Route path="/students/list" element={<StudentsList />} />
+        <Route path="/students/:id" element={<StudentDetail />} />
+
+        <Route path="/fees" element={<FeesDashboard />} />
+        <Route path="/attendance" element={<AttendanceDashboard />} />
+        <Route path="/alerts" element={<AlertsDashboard />} />
+        <Route path="/reports" element={<ReportsDashboard />} />
+        <Route path="/insights" element={<InsightsDashboard />} />
+
+        <Route path="/system" element={<SystemhealthDashboard />} />
+        <Route path="/sync" element={<SyncStatusDashboard />} />
+        <Route path="/settings" element={<SettingsDashboard />} />
+
+      </Route>
+
+    </Routes>
   )
 }

@@ -12,3 +12,18 @@ export default function LiveIndicator() {
     </div>
   )
 }
+
+
+export default function Badge({ text, color = "#22c55e" }) {
+  return (
+    <span style={{
+      padding: "4px 8px",
+      borderRadius: 999,
+      fontSize: 11,
+      background: `${color}20`,
+      color
+    }}>
+      {text}
+    </span>
+  )
+}
