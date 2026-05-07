@@ -1,9 +1,9 @@
 import { useState } from "react"
 import { Outlet } from "react-router-dom"
 
-import Sidebar from "../components/navigation/Sidebar"
-import Topbar from "../components/navigation/Topbar"
-import { useResponsive } from "../hooks/useResponsive"
+import Sidebar from "../navigation/Sidebar"
+import Topbar from "../navigation/Topbar"
+import { useResponsive } from "../../hooks/useResponsive"
 
 const SIDEBAR_WIDTH = 260
 const TOPBAR_HEIGHT = 76
