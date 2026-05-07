@@ -43,7 +43,7 @@
 
 import { Routes, Route } from "react-router-dom"
 
-import AppLayout from "./components/AppLayout/layout"
+import AppLayout from "./components/AppLayout"
 
 import HomeDashboard from "./pages/HomeDashboard"
 import Students from "./pages/StudentsDashboard"
