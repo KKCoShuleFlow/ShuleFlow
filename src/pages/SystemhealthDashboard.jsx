@@ -1,203 +1,200 @@
-import { useEffect, useState, useRef } from "react"
-import { db } from "../db"
+import { useEffect, useMemo, useState } from "react"
+import { supabase } from "../lib/supabase"
 
-export default function SystemhealthDashboard() {
-  const [os, setOs] = useState(null)
-  const memoryRef = useRef({
-    history: [],
-    mood: "neutral",
+export default function SystemHealthDashboard() {
+  const [data, setData] = useState({
+    students: [],
+    fees: [],
+    attendance: [],
   })
 
+  const load = async () => {
+    const [{ data: s }, { data: f }, { data: a }] = await Promise.all([
+      supabase.from("students").select("*"),
+      supabase.from("fees").select("*"),
+      supabase.from("attendance").select("*"),
+    ])
+
+    setData({
+      students: s || [],
+      fees: f || [],
+      attendance: a || [],
+    })
+  }
+
   useEffect(() => {
-    const tick = async () => {
-      const students = await db.students.toArray()
-      const fees = await db.fees.toArray()
+    load()
 
-      const snapshot = computeOS(students, fees, memoryRef.current)
+    const channel = supabase
+      .channel("system-health")
+      .on("postgres_changes", { event: "*", schema: "public", table: "students" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "fees" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "attendance" }, load)
+      .subscribe()
 
-      memoryRef.current = snapshot.memory
-      setOs(snapshot)
-    }
-
-    tick()
-    const interval = setInterval(tick, 3000)
-
-    return () => clearInterval(interval)
+    return () => supabase.removeChannel(channel)
   }, [])
 
-  if (!os) {
-    return (
-      <div style={styles.loading}>
-        🧠 Booting Self-Aware School OS...
-      </div>
+  /* ---------------- HEALTH ENGINE ---------------- */
+  const health = useMemo(() => {
+    const students = data.students
+    const fees = data.fees
+    const attendance = data.attendance
+
+    const issues = []
+    const warnings = []
+
+    // DATA INTEGRITY
+    const missingStudents = students.filter(s => !s.name || !s.class).length
+    const missingFees = fees.filter(f => !f.student_id || !f.amount).length
+    const missingAttendance = attendance.filter(a => !a.student_id || !a.status).length
+
+    if (missingStudents > 0)
+      issues.push(`❌ ${missingStudents} incomplete student records`)
+
+    if (missingFees > 0)
+      issues.push(`❌ ${missingFees} broken fee records`)
+
+    if (missingAttendance > 0)
+      issues.push(`❌ ${missingAttendance} invalid attendance entries`)
+
+    // SYSTEM LOAD SIGNALS
+    if (fees.length > 5000)
+      warnings.push("⚠️ High financial dataset load detected")
+
+    if (attendance.length > students.length * 50)
+      warnings.push("⚠️ Attendance history is very large — optimize queries")
+
+    // SYNC HEALTH
+    const lastUpdateTime = new Date(
+      Math.max(
+        ...fees.map(f => new Date(f.created_at || 0)),
+        ...attendance.map(a => new Date(a.created_at || 0))
+      )
     )
-  }
+
+    const now = new Date()
+    const diffMinutes = (now - lastUpdateTime) / 60000
+
+    let syncStatus = "healthy"
+
+    if (diffMinutes > 60) syncStatus = "stale"
+    if (diffMinutes > 180) syncStatus = "critical"
+
+    if (syncStatus === "stale")
+      warnings.push("⚠️ Data sync is delayed (possible offline mode)")
+    if (syncStatus === "critical")
+      issues.push("❌ System data is severely outdated")
+
+    // FINAL STATUS
+    let systemStatus = "healthy"
+
+    if (issues.length > 0) systemStatus = "critical"
+    else if (warnings.length > 0) systemStatus = "warning"
+
+    const recommendation =
+      systemStatus === "critical"
+        ? "Fix critical data issues immediately — system reliability at risk."
+        : systemStatus === "warning"
+        ? "Monitor system closely — minor issues detected."
+        : "System is stable and operating normally."
+
+    return {
+      systemStatus,
+      issues,
+      warnings,
+      recommendation,
+      syncStatus,
+    }
+  }, [data])
 
   return (
     <div style={styles.wrapper}>
 
-      {/* HEADER (SELF AWARE STATE) */}
+      {/* HEADER */}
       <div style={styles.header}>
-        <div style={{ fontSize: 22, fontWeight: 900 }}>
-          🧠 SCHOOL OS — SELF AWARE MODE
-        </div>
-
-        <div style={{ fontSize: 12, opacity: 0.7 }}>
-          Mood:{" "}
-          <span style={{ color: moodColor(os.memory.mood) }}>
-            {os.memory.mood.toUpperCase()}
-          </span>{" "}
-          | Confidence: {os.confidence}%
+        <div style={styles.title}>🧠 SYSTEM HEALTH CENTER</div>
+        <div style={styles.subtitle}>
+          Real-time infrastructure & data integrity monitor
         </div>
       </div>
 
-      {/* SYSTEM STATUS CORE */}
+      {/* STATUS BANNER */}
+      <div
+        style={{
+          ...styles.banner,
+          background:
+            health.systemStatus === "critical"
+              ? "rgba(239,68,68,0.15)"
+              : health.systemStatus === "warning"
+              ? "rgba(245,158,11,0.15)"
+              : "rgba(34,197,94,0.15)",
+        }}
+      >
+        {health.systemStatus.toUpperCase()} SYSTEM
+      </div>
+
+      {/* KPI */}
+      <div style={styles.kpiGrid}>
+        <KPI label="Issues" value={health.issues.length} color="#ef4444" />
+        <KPI label="Warnings" value={health.warnings.length} color="#f59e0b" />
+        <KPI label="Sync" value={health.syncStatus} color="#38bdf8" />
+        <KPI label="Status" value={health.systemStatus} color="#22c55e" />
+      </div>
+
+      {/* MAIN GRID */}
       <div style={styles.grid}>
 
-        <Metric label="System Health" value={os.health} />
-        <Metric label="Future Risk (Forecast)" value={os.forecast} />
-        <Metric label="Memory Depth" value={os.memory.history.length} />
-        <Metric label="Stability Index" value={os.stability} />
+        {/* ISSUES */}
+        <div style={styles.panel}>
+          <div style={styles.panelTitle}>❌ CRITICAL ISSUES</div>
 
-      </div>
+          {health.issues.length === 0 && (
+            <div style={styles.ok}>No critical issues detected 🎉</div>
+          )}
 
-      {/* SELF REFLECTION PANEL */}
-      <div style={styles.panel}>
-        <div style={styles.title}>🪞 Self Reflection</div>
-        <div style={styles.text}>
-          {os.thought}
+          {health.issues.map((i, idx) => (
+            <div key={idx} style={styles.issue}>{i}</div>
+          ))}
         </div>
-      </div>
 
-      {/* FORECAST ENGINE */}
-      <div style={styles.panelDark}>
-        <div style={styles.title}>🔮 Predictive Awareness</div>
-        <div style={styles.text}>
-          {os.forecastText}
+        {/* WARNINGS */}
+        <div style={styles.panel}>
+          <div style={styles.panelTitle}>⚠️ WARNINGS</div>
+
+          {health.warnings.map((w, idx) => (
+            <div key={idx} style={styles.warning}>{w}</div>
+          ))}
         </div>
-      </div>
 
-      {/* MEMORY STREAM */}
-      <div style={styles.stream}>
-        <div style={styles.title}>📡 Memory Stream</div>
+        {/* RECOMMENDATION */}
+        <div style={styles.panel}>
+          <div style={styles.panelTitle}>🧠 SYSTEM RECOMMENDATION</div>
 
-        {os.memory.history.slice(0, 10).map((h, i) => (
-          <div key={i} style={styles.log}>
-            <span style={{ opacity: 0.6 }}>{h.time}</span>
-            <span style={{ marginLeft: 10 }}>
-              {h.state}
-            </span>
+          <div style={styles.recommendation}>
+            {health.recommendation}
           </div>
-        ))}
+        </div>
+
       </div>
 
     </div>
   )
 }
 
-/* ---------------- CORE OS ENGINE ---------------- */
+/* ---------------- UI ---------------- */
 
-function computeOS(students, fees, memory) {
-  const totalExpected = fees.reduce((a, f) => a + Number(f.amount || 0), 0)
-  const totalPaid = fees.reduce((a, f) => a + Number(f.paid || 0), 0)
-
-  const health = totalExpected
-    ? Math.round((totalPaid / totalExpected) * 100)
-    : 100
-
-  // simple forward prediction (memory-based trend)
-  const last = memory.history[0]?.health || health
-  const trend = health - last
-
-  const forecast = Math.max(0, Math.min(100, health + trend * 2))
-
-  let mood = "stable"
-  if (health < 40) mood = "distressed"
-  else if (health < 70) mood = "unstable"
-  else if (trend > 5) mood = "optimistic"
-  else if (trend < -5) mood = "declining"
-
-  const stability = Math.max(0, health - Math.abs(trend))
-
-  const confidence = Math.min(100, memory.history.length * 8)
-
-  // SELF-THOUGHT ENGINE
-  const thought = generateThought({ health, trend, mood })
-
-  // FUTURE FORECAST TEXT
-  const forecastText = generateForecast({ forecast, mood, trend })
-
-  const newMemory = {
-    history: [
-      {
-        time: new Date().toLocaleTimeString(),
-        health,
-        state: mood,
-      },
-      ...memory.history,
-    ],
-    mood,
-  }
-
-  return {
-    health,
-    forecast,
-    stability,
-    confidence,
-    memory: newMemory,
-    thought,
-    forecastText,
-  }
-}
-
-/* ---------------- SELF THOUGHT ---------------- */
-
-function generateThought({ health, trend, mood }) {
-  if (mood === "distressed") {
-    return "System experiencing sustained degradation. Financial stress and student risk signals are converging."
-  }
-
-  if (mood === "unstable") {
-    return "System stability is weakening. Minor fluctuations detected across financial and attendance layers."
-  }
-
-  if (mood === "optimistic") {
-    return "System is improving. Positive financial and behavioral signals detected across multiple subsystems."
-  }
-
-  return "System is balanced. No significant anomalies detected in current operational state."
-}
-
-/* ---------------- FORECAST ---------------- */
-
-function generateForecast({ forecast, trend, mood }) {
-  if (forecast < 40) {
-    return "If current trajectory continues, system may enter critical instability within next cycle."
-  }
-
-  if (trend < -5) {
-    return "Downward trend detected. Risk accumulation likely if not corrected."
-  }
-
-  if (trend > 5) {
-    return "Positive momentum detected. System is self-stabilizing."
-  }
-
-  return "System trajectory remains neutral. No immediate risks forecasted."
-}
-
-/* ---------------- UI COMPONENTS ---------------- */
-
-function Metric({ label, value }) {
+function KPI({ label, value, color }) {
   return (
-    <div style={styles.card}>
-      <div style={{ fontSize: 11, opacity: 0.6 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 900 }}>
-        {value}
-      </div>
+    <div style={styles.kpi}>
+      <div style={styles.kpiLabel}>{label}</div>
+      <div style={{ ...styles.kpiValue, color }}>{value}</div>
     </div>
   )
 }
+
+
+
 
 /* ---------------- STYLES ---------------- */
 
@@ -205,89 +202,98 @@ const styles = {
   wrapper: {
     padding: 20,
     background: "#050816",
-    minHeight: "100vh",
     color: "white",
-    fontFamily: "Inter",
-  },
-
-  loading: {
-    padding: 24,
-    background: "#050816",
-    color: "#60a5fa",
+    fontFamily: "Inter, system-ui",
     minHeight: "100vh",
   },
 
   header: {
-    marginBottom: 16,
-    paddingBottom: 10,
-    borderBottom: "1px solid rgba(255,255,255,0.1)",
+    marginBottom: 12,
+  },
+
+  title: {
+    fontSize: 22,
+    fontWeight: 900,
+  },
+
+  subtitle: {
+    fontSize: 12,
+    opacity: 0.6,
+  },
+
+  banner: {
+    padding: 12,
+    borderRadius: 12,
+    textAlign: "center",
+    fontWeight: 800,
+    marginBottom: 12,
+  },
+
+  kpiGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4,1fr)",
+    gap: 10,
+    marginBottom: 12,
+  },
+
+  kpi: {
+    background: "#0f172a",
+    padding: 12,
+    borderRadius: 12,
+  },
+
+  kpiLabel: {
+    fontSize: 11,
+    opacity: 0.6,
+  },
+
+  kpiValue: {
+    fontSize: 18,
+    fontWeight: 800,
   },
 
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
+    gridTemplateColumns: "1fr 1fr 1fr",
     gap: 12,
   },
 
-  card: {
-    background: "#0f172a",
-    padding: 14,
-    borderRadius: 14,
-  },
-
   panel: {
-    marginTop: 14,
     background: "#0f172a",
     padding: 14,
     borderRadius: 14,
   },
 
-  panelDark: {
-    marginTop: 14,
-    background: "#020617",
-    padding: 14,
-    borderRadius: 14,
-  },
-
-  title: {
+  panelTitle: {
     fontSize: 12,
     fontWeight: 800,
-    marginBottom: 8,
+    marginBottom: 10,
   },
 
-  text: {
+  issue: {
+    padding: 10,
+    background: "rgba(239,68,68,0.08)",
+    borderRadius: 10,
+    marginBottom: 6,
+    fontSize: 12,
+  },
+
+  warning: {
+    padding: 10,
+    background: "rgba(245,158,11,0.08)",
+    borderRadius: 10,
+    marginBottom: 6,
+    fontSize: 12,
+  },
+
+  recommendation: {
     fontSize: 13,
     lineHeight: 1.6,
     opacity: 0.9,
   },
 
-  stream: {
-    marginTop: 14,
-    background: "#020617",
-    padding: 14,
-    borderRadius: 14,
-    maxHeight: 200,
-    overflow: "auto",
-  },
-
-  log: {
+  ok: {
     fontSize: 12,
-    padding: "6px 0",
-    borderBottom: "1px solid rgba(255,255,255,0.05)",
+    opacity: 0.6,
   },
-}
-
-/* ---------------- HELPERS ---------------- */
-
-function moodColor(mood) {
-  switch (mood) {
-    case "distressed":
-      return "#ef4444"
-    case "unstable":
-      return "#f59e0b"
-    case "optimistic":
-      return "#22c55e"
-    default:
-      return "#60a5fa"
-  }
 }

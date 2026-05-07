@@ -1,524 +1,293 @@
-// import { useEffect, useState } from "react"
-// import { db } from "../db"
-
-// export default function StudentsDashboard() {
-//   const [data, setData] = useState(null)
-
-//   useEffect(() => {
-//     const run = async () => {
-//       const students = await db.students.toArray()
-//       const fees = await db.fees.toArray()
-
-//       setData(build(students, fees))
-//     }
-
-//     run()
-//     const t = setInterval(run, 2500)
-
-//     return () => clearInterval(t)
-//   }, [])
-
-//   if (!data) {
-//     return (
-//       <div style={{
-//         padding: 24,
-//         background: "#050816",
-//         color: "#93c5fd",
-//         minHeight: "100vh"
-//       }}>
-//         🧠 Loading student intelligence engine...
-//       </div>
-//     )
-//   }
-
-//   const top = data?.students?.[0] || null
-
-//   return (
-//     <div style={{
-//       padding: 24,
-//       background: "#050816",
-//       minHeight: "100vh",
-//       color: "white"
-//     }}>
-
-//       {/* HEADER */}
-//       <Header />
-
-//       {/* TOP STRIP */}
-//       <TopKPIs data={data} />
-
-//       {/* MAIN GRID */}
-//       <div style={{
-//         display: "grid",
-//         gridTemplateColumns: "2fr 1fr",
-//         gap: 14,
-//         marginTop: 16
-//       }}>
-
-//         {/* LEFT: STUDENT RISK BOARD */}
-//         <Panel title="🧠 STUDENT RISK INTELLIGENCE">
-//           {data.students.map((s, i) => (
-//             <StudentRow key={i} s={s} />
-//           ))}
-//         </Panel>
-
-//         {/* RIGHT: INSIGHTS */}
-//         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-
-//           <Panel title="🔴 HIGHEST RISK">
-//   <div style={{ fontWeight: 900, fontSize: 16 }}> 
-//     {top?.name || "All Clear"} 
-//   </div>
-//   {top && (
-//     <>
-//       <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}> 
-//         Risk Score: {top.risk}/100 
-//       </div>
-//       <div style={{ fontSize: 12, color: "#ef4444" }}> 
-//         Debt: ${top.balance} 
-//       </div>
-//     </>
-//   )}
-// </Panel>
-
-//           <Panel title="🧠 AI INSIGHT ENGINE">
-//             <div style={{ fontSize: 13, lineHeight: 1.6 }}>
-//               {data.insight}
-//             </div>
-//           </Panel>
-
-//           <Panel title="🎯 RECOMMENDED ACTIONS">
-//             <ul style={{ fontSize: 13, lineHeight: 1.8 }}>
-//               {data.actions.map((a, i) => (
-//                 <li key={i}>→ {a}</li>
-//               ))}
-//             </ul>
-//           </Panel>
-
-//         </div>
-//       </div>
-//     </div>
-//   )
-// }
-
-// /* ---------------- HEADER ---------------- */
-
-// function Header() {
-//   return (
-//     <div style={{
-//       marginBottom: 14,
-//       borderBottom: "1px solid rgba(148,163,184,0.2)",
-//       paddingBottom: 10
-//     }}>
-//       <div style={{ fontSize: 22, fontWeight: 900 }}>
-//         🧠 STUDENT INTELLIGENCE SYSTEM
-//       </div>
-//       <div style={{ fontSize: 12, color: "#94a3b8" }}>
-//         Live behavioral + financial risk modeling per student
-//       </div>
-//     </div>
-//   )
-// }
-
-// /* ---------------- TOP KPIs ---------------- */
-
-// function TopKPIs({ data }) {
-//   return (
-//     <div style={{
-//       display: "grid",
-//       gridTemplateColumns: "repeat(4, 1fr)",
-//       gap: 12
-//     }}>
-//       <KPI label="Total Students" value={data.total} />
-//       <KPI label="High Risk" value={data.high} color="#ef4444" />
-//       <KPI label="Revenue Risk" value={data.revenueRisk + "%"} />
-//       <KPI label="Avg Risk Score" value={data.avgRisk} />
-//     </div>
-//   )
-// }
-
-// function KPI({ label, value, color = "white" }) {
-//   return (
-//     <div style={{
-//       background: "#0f172a",
-//       padding: 14,
-//       borderRadius: 14,
-//       border: "1px solid rgba(148,163,184,0.2)"
-//     }}>
-//       <div style={{ fontSize: 11, color: "#94a3b8" }}>
-//         {label}
-//       </div>
-//       <div style={{ fontSize: 20, fontWeight: 900, color }}>
-//         {value}
-//       </div>
-//     </div>
-//   )
-// }
-
-// /* ---------------- PANEL ---------------- */
-
-// function Panel({ title, children }) {
-//   return (
-//     <div style={{
-//       background: "#0f172a",
-//       border: "1px solid rgba(148,163,184,0.2)",
-//       borderRadius: 14,
-//       padding: 14
-//     }}>
-//       <div style={{
-//         fontSize: 12,
-//         fontWeight: 800,
-//         marginBottom: 10
-//       }}>
-//         {title}
-//       </div>
-//       {children}
-//     </div>
-//   )
-// }
-
-// /* ---------------- STUDENT ROW ---------------- */
-
-// function StudentRow({ s }) {
-//   const color =
-//     s.risk > 70 ? "#ef4444" :
-//     s.risk > 40 ? "#f59e0b" :
-//     "#22c55e"
-
-//   return (
-//     <div style={{
-//       display: "flex",
-//       justifyContent: "space-between",
-//       padding: 10,
-//       marginBottom: 8,
-//       borderRadius: 10,
-//       background: "rgba(255,255,255,0.03)"
-//     }}>
-
-//       <div>
-//         <div style={{ fontWeight: 700 }}>{s.name}</div>
-//         <div style={{ fontSize: 11, color: "#94a3b8" }}>
-//           Balance: {s.balance}
-//         </div>
-//       </div>
-
-//       <div style={{
-//         fontWeight: 900,
-//         color
-//       }}>
-//         {s.risk}/100
-//       </div>
-
-//     </div>
-//   )
-// }
-
-// /* ---------------- ENGINE ---------------- */
-
-// <Panel title="🔴 HIGHEST RISK">
-//   <div style={{ fontWeight: 900, fontSize: 16 }}> 
-//     {top?.name || "All Clear"} 
-//   </div>
-//   {top && (
-//     <>
-//       <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}> 
-//         Risk Score: {top.risk}/100 
-//       </div>
-//       <div style={{ fontSize: 12, color: "#ef4444" }}> 
-//         Debt: ${top.balance} 
-//       </div>
-//     </>
-//   )}
-// </Panel>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import { useEffect, useState } from "react"
-import { db } from "../db/index"
+import { supabase } from "../lib/supabase"
+import { buildStudentsEngine } from "../lib/students/studentsEngine"
 
 export default function StudentsDashboard() {
-  const [data, setData] = useState(null)
+  const [students, setStudents] = useState([])
+  const [engine, setEngine] = useState(null)
+
+  /* ---------------- LOAD ---------------- */
+  const load = async () => {
+    const { data } = await supabase.from("students").select("*")
+    const safe = data || []
+
+    setStudents(safe)
+    setEngine(buildStudentsEngine(safe))
+  }
 
   useEffect(() => {
-    let active = true
+    load()
 
-    const run = async () => {
-      try {
-        const students = (await db.students.toArray()) || []
-        const fees = (await db.fees.toArray()) || []
+    const channel = supabase
+      .channel("students-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "students" },
+        load
+      )
+      .subscribe()
 
-        if (!active) return
-        setData(build(students, fees))
-      } catch (err) {
-        console.error("StudentsDashboard error:", err)
-      }
-    }
-
-    run()
-    const interval = setInterval(run, 2500)
-
-    return () => {
-      active = false
-      clearInterval(interval)
-    }
+    return () => supabase.removeChannel(channel)
   }, [])
 
-  if (!data) {
+  /* ---------------- LOADING ---------------- */
+  if (!engine) {
     return (
-      <div style={{
-        minHeight: "100vh",
-        background: "#050816",
-        color: "#93c5fd",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: 14
-      }}>
-        🧠 Initializing Student Intelligence Engine...
+      <div style={styles.loading}>
+        🧑‍🎓 Loading Students OS...
       </div>
     )
   }
 
-  const top = data.students?.[0] || null
+  const { summary, topRisk, insights } = engine
 
   return (
-    <div style={{
-      padding: 24,
-      minHeight: "100vh",
-      background: "#050816",
-      color: "white"
-    }}>
+    <div style={styles.wrapper}>
 
       {/* HEADER */}
-      <Header />
+      <div style={styles.header}>
+        <div style={styles.title}>🧑‍🎓 STUDENTS OS</div>
+        <div style={styles.subtitle}>
+          Lifecycle tracking, risk detection & intelligence layer
+        </div>
+      </div>
 
-      {/* KPI ROW */}
-      <TopKPIs data={data} />
+      {/* KPI */}
+      <div style={styles.grid}>
+        <Card label="Total Students" value={summary.total} />
+        <Card label="Active" value={summary.active} color="#22c55e" />
+        <Card label="Inactive" value={summary.inactive} color="#ef4444" />
+      </div>
 
-      {/* MAIN GRID */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "2fr 1fr",
-        gap: 16,
-        marginTop: 18
-      }}>
+      {/* MAIN */}
+      <div style={styles.main}>
 
-        {/* LEFT: RISK TABLE */}
-        <Panel title="🧠 STUDENT RISK MATRIX">
-          {(data.students || []).length === 0 ? (
-            <div style={{ color: "#94a3b8", fontSize: 13 }}>
-              No students available
+        {/* LEFT */}
+        <Panel title="🚨 High Risk Students">
+
+          {topRisk.length === 0 && (
+            <div style={styles.empty}>
+              No risk detected 🎉
             </div>
-          ) : (
-            data.students.map((s) => (
-              <StudentRow key={s.id || s.name} s={s} />
-            ))
           )}
+
+          {topRisk.map((s, i) => (
+            <StudentRow key={i} s={s} />
+          ))}
+
         </Panel>
 
-        {/* RIGHT SIDE */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* RIGHT */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
-          <Panel title="🔴 TOP RISK STUDENT">
-            <div style={{ fontWeight: 900, fontSize: 16 }}>
-              {top?.name || "System Stable"}
-            </div>
-
-            <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 6 }}>
-              Risk Score: {top?.risk ?? 0}/100
-            </div>
-
-            <div style={{ fontSize: 12, color: "#ef4444", marginTop: 4 }}>
-              Debt: ${top?.balance ?? 0}
-            </div>
+          <Panel title="🧠 AI Insights">
+            {insights.map((i, idx) => (
+              <div key={idx} style={styles.text}>
+                • {i}
+              </div>
+            ))}
           </Panel>
 
-          <Panel title="🧠 AI INSIGHTS ENGINE">
-            <div style={{ fontSize: 13, lineHeight: 1.6 }}>
-              {data.insight}
-            </div>
-          </Panel>
-
-          <Panel title="🎯 SYSTEM ACTIONS">
-            <ul style={{ fontSize: 13, lineHeight: 1.8 }}>
-              {(data.actions || []).map((a, i) => (
-                <li key={i}>→ {a}</li>
-              ))}
-            </ul>
+          <Panel title="➕ Add Student (Quick Input)">
+            <StudentForm reload={load} />
           </Panel>
 
         </div>
+
       </div>
     </div>
   )
 }
 
-/* ================= HEADER ================= */
+/* ---------------- INPUT FORM ---------------- */
 
-function Header() {
+function StudentForm({ reload }) {
+  const [name, setName] = useState("")
+  const [cls, setCls] = useState("")
+
+  const addStudent = async () => {
+    if (!name) return
+
+    await supabase.from("students").insert([
+      {
+        name,
+        class: cls,
+        status: "active"
+      }
+    ])
+
+    setName("")
+    setCls("")
+    reload()
+  }
+
   return (
-    <div style={{
-      marginBottom: 16,
-      paddingBottom: 12,
-      borderBottom: "1px solid rgba(148,163,184,0.2)"
-    }}>
-      <div style={{ fontSize: 22, fontWeight: 900 }}>
-        🧠 STUDENT INTELLIGENCE SYSTEM
-      </div>
-      <div style={{ fontSize: 12, color: "#94a3b8" }}>
-        Real-time financial + behavioral risk analytics engine
-      </div>
+    <div style={styles.form}>
+      <input
+        placeholder="Student name"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        style={styles.input}
+      />
+
+      <input
+        placeholder="Class"
+        value={cls}
+        onChange={(e) => setCls(e.target.value)}
+        style={styles.input}
+      />
+
+      <button onClick={addStudent} style={styles.button}>
+        ➕ Add Student
+      </button>
     </div>
   )
 }
 
-/* ================= KPI ================= */
+/* ---------------- COMPONENTS ---------------- */
 
-function TopKPIs({ data }) {
+function Card({ label, value, color = "#38bdf8" }) {
   return (
-    <div style={{
-      display: "grid",
-      gridTemplateColumns: "repeat(4, 1fr)",
-      gap: 12
-    }}>
-      <KPI label="Students" value={data.total} />
-      <KPI label="High Risk" value={data.high} color="#ef4444" />
-      <KPI label="Avg Risk" value={data.avgRisk} />
-      <KPI label="Revenue Risk" value={data.revenueRisk + "%"} />
+    <div style={styles.card}>
+      <div style={styles.cardLabel}>{label}</div>
+      <div style={{ ...styles.cardValue, color }}>{value}</div>
     </div>
   )
 }
-
-function KPI({ label, value, color = "white" }) {
-  return (
-    <div style={{
-      background: "#0f172a",
-      border: "1px solid rgba(148,163,184,0.2)",
-      borderRadius: 14,
-      padding: 14
-    }}>
-      <div style={{ fontSize: 11, color: "#94a3b8" }}>
-        {label}
-      </div>
-      <div style={{ fontSize: 20, fontWeight: 900, color }}>
-        {value}
-      </div>
-    </div>
-  )
-}
-
-/* ================= PANEL ================= */
 
 function Panel({ title, children }) {
   return (
-    <div style={{
-      background: "#0f172a",
-      border: "1px solid rgba(148,163,184,0.2)",
-      borderRadius: 14,
-      padding: 14
-    }}>
-      <div style={{
-        fontSize: 12,
-        fontWeight: 800,
-        marginBottom: 10,
-        color: "#cbd5e1"
-      }}>
-        {title}
-      </div>
+    <div style={styles.panel}>
+      <div style={styles.panelTitle}>{title}</div>
       {children}
     </div>
   )
 }
 
-/* ================= ROW ================= */
-
 function StudentRow({ s }) {
   const color =
-    s.risk > 70 ? "#ef4444" :
-    s.risk > 40 ? "#f59e0b" :
+    s.risk > 80 ? "#ef4444" :
+    s.risk > 50 ? "#f59e0b" :
     "#22c55e"
 
   return (
-    <div style={{
-      display: "flex",
-      justifyContent: "space-between",
-      padding: 10,
-      marginBottom: 8,
-      borderRadius: 10,
-      background: "rgba(255,255,255,0.03)"
-    }}>
+    <div style={styles.row}>
       <div>
-        <div style={{ fontWeight: 700 }}>
-          {s.name}
-        </div>
-        <div style={{ fontSize: 11, color: "#94a3b8" }}>
-          Balance: {s.balance}
-        </div>
+        <div style={styles.name}>{s.name}</div>
+        <div style={styles.sub}>{s.class}</div>
       </div>
 
-      <div style={{
-        fontWeight: 900,
-        color
-      }}>
-        {s.risk}/100
+      <div style={{ ...styles.risk, color }}>
+        {s.risk}%
       </div>
     </div>
   )
 }
 
-/* ================= ENGINE ================= */
-function build(students, fees) {
-  const enriched = (students || []).map(s => {
-    const sFees = fees.filter(f => f.studentId === s.id)
 
-    const expected = sFees.reduce((a, f) => a + Number(f.amount || 0), 0)
-    const paid = sFees.reduce((a, f) => a + Number(f.paid || 0), 0)
+/* ---------------- STYLES ---------------- */
 
-    const balance = expected - paid
+const styles = {
+  wrapper: {
+    padding: 20,
+    background: "#050816",
+    color: "white",
+    height: "100vh",
+    overflow: "hidden"
+  },
 
-    let risk = 10
-    if (balance > 0) risk += Math.min(balance / 100, 60)
-    if (expected > 0) risk += (1 - paid / expected) * 30
+  loading: {
+    padding: 20,
+    color: "#60a5fa",
+    background: "#050816",
+    minHeight: "100vh"
+  },
 
-    return {
-      id: s.id,
-      name: s.name || "Unknown",
-      risk: Math.min(Math.round(risk), 100),
-      balance: balance || 0
-    }
-  }).sort((a, b) => b.risk - a.risk)
+  header: {
+    marginBottom: 12,
+    borderBottom: "1px solid rgba(255,255,255,0.08)",
+    paddingBottom: 10
+  },
 
-  const total = enriched.length
-  const high = enriched.filter(s => s.risk > 70).length
-  const avgRisk = Math.round(
-    enriched.reduce((a, b) => a + b.risk, 0) / (total || 1)
-  )
+  title: { fontSize: 22, fontWeight: 900 },
+  subtitle: { fontSize: 12, opacity: 0.6 },
 
-  return {
-    students: enriched,
-    total,
-    high,
-    avgRisk,
-    revenueRisk: Math.max(0, 100 - avgRisk),
-    insight:
-      total === 0
-        ? "No student data detected — system idle mode"
-        : "Live risk engine analyzing financial stress + behavior patterns",
-    actions:
-      high > 0
-        ? ["Contact high-risk students", "Review unpaid balances", "Trigger alerts"]
-        : ["System stable", "Continue monitoring trends"]
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3,1fr)",
+    gap: 12,
+    marginTop: 12
+  },
+
+  card: {
+    background: "#0f172a",
+    padding: 14,
+    borderRadius: 14
+  },
+
+  cardLabel: { fontSize: 11, opacity: 0.6 },
+  cardValue: { fontSize: 20, fontWeight: 900 },
+
+  main: {
+    display: "grid",
+    gridTemplateColumns: "2fr 1fr",
+    gap: 14,
+    marginTop: 16
+  },
+
+  panel: {
+    background: "#0f172a",
+    borderRadius: 14,
+    padding: 14
+  },
+
+  panelTitle: {
+    fontSize: 12,
+    fontWeight: 800,
+    marginBottom: 10
+  },
+
+  text: {
+    fontSize: 13,
+    lineHeight: 1.6
+  },
+
+  row: {
+    display: "flex",
+    justifyContent: "space-between",
+    padding: 10,
+    marginBottom: 8,
+    borderRadius: 10,
+    background: "rgba(255,255,255,0.03)"
+  },
+
+  name: { fontWeight: 700 },
+  sub: { fontSize: 11, opacity: 0.6 },
+  risk: { fontWeight: 900 },
+
+  empty: { fontSize: 13, opacity: 0.6 },
+
+  /* INPUTS */
+  form: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8
+  },
+
+  input: {
+    padding: 10,
+    borderRadius: 8,
+    border: "1px solid rgba(255,255,255,0.1)",
+    background: "#020617",
+    color: "white"
+  },
+
+  button: {
+    padding: 10,
+    borderRadius: 8,
+    border: "none",
+    background: "#3b82f6",
+    color: "white",
+    cursor: "pointer"
   }
 }

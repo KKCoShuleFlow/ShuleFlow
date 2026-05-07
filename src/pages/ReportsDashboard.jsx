@@ -1,291 +1,787 @@
-import { useEffect, useState } from "react"
-import { db } from "../db"
+import { useEffect, useMemo, useState } from "react"
+import { supabase } from "../lib/supabase"
+import { Bar, Doughnut } from "react-chartjs-2"
+import jsPDF from "jspdf"
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+} from "chart.js"
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend
+)
+
+const safeArray = (v) => (Array.isArray(v) ? v : [])
+const toNum = (v) => {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : 0
+}
+const normalize = (v) => String(v ?? "").trim().toLowerCase()
+const getStudentName = (s) => s?.name || s?.student || s?.student_name || "Unknown"
+const getClassName = (s) => s?.class || s?.student_class || s?.grade || "Unassigned"
 
 export default function ReportsDashboard() {
-  const [report, setReport] = useState(null)
+  const [students, setStudents] = useState([])
+  const [fees, setFees] = useState([])
+  const [attendance, setAttendance] = useState([])
+  const [alerts, setAlerts] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  const loadAll = async () => {
+    try {
+      const [{ data: s }, { data: f }, { data: a }, { data: al }] = await Promise.all([
+        supabase.from("students").select("*"),
+        supabase.from("fees").select("*"),
+        supabase.from("attendance").select("*"),
+        supabase.from("alerts").select("*"),
+      ])
+
+      setStudents(safeArray(s))
+      setFees(safeArray(f))
+      setAttendance(safeArray(a))
+      setAlerts(safeArray(al))
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    let alive = true
+    loadAll()
 
-    const run = async () => {
-      const students = await db.students.toArray()
-      const fees = await db.fees.toArray()
-      const attendance = await db.attendance.toArray()
+    const channel = supabase
+      .channel("reports-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "students" },
+        loadAll
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "fees" },
+        loadAll
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "attendance" },
+        loadAll
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "alerts" },
+        loadAll
+      )
+      .subscribe()
 
-      if (!alive) return
-      setReport(buildReportEngine(students, fees, attendance))
-    }
-
-    run()
-    const t = setInterval(run, 3000)
-
-    return () => {
-      alive = false
-      clearInterval(t)
-    }
+    return () => supabase.removeChannel(channel)
   }, [])
 
-  if (!report) {
+  const report = useMemo(() => {
+    const safeStudents = safeArray(students)
+    const safeFees = safeArray(fees)
+    const safeAttendance = safeArray(attendance)
+    const safeAlerts = safeArray(alerts)
+
+    const totalStudents = safeStudents.length
+    const totalDue = safeFees.reduce((sum, f) => sum + toNum(f.amount), 0)
+    const totalPaid = safeFees.reduce((sum, f) => sum + toNum(f.paid), 0)
+    const outstanding = Math.max(0, totalDue - totalPaid)
+    const collectionRate = totalDue ? Math.round((totalPaid / totalDue) * 100) : 0
+
+    const presentCount = safeAttendance.filter((a) => normalize(a.status) === "present").length
+    const absentCount = safeAttendance.filter((a) => normalize(a.status) === "absent").length
+    const lateCount = safeAttendance.filter((a) => normalize(a.status) === "late").length
+    const attendanceTotal = safeAttendance.length
+    const attendanceRate = attendanceTotal ? Math.round((presentCount / attendanceTotal) * 100) : 0
+
+    const overdueFees = safeFees.filter((f) => toNum(f.amount) > toNum(f.paid))
+    const overdueCount = overdueFees.length
+
+    const classRevenueMap = {}
+    safeFees.forEach((f) => {
+      const cls = getClassName(f)
+      classRevenueMap[cls] = (classRevenueMap[cls] || 0) + toNum(f.paid)
+    })
+
+    const topClasses = Object.entries(classRevenueMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+
+    const severityCounts = {
+      critical: 0,
+      high: 0,
+      medium: 0,
+      low: 0,
+    }
+
+    safeAlerts.forEach((a) => {
+      const sev = normalize(a.severity || a.level || "low")
+      if (severityCounts[sev] === undefined) severityCounts.low += 1
+      else severityCounts[sev] += 1
+    })
+
+    const topRiskStudents = safeStudents
+      .map((s) => {
+        const name = getStudentName(s)
+        const className = getClassName(s)
+        const sid = normalize(String(s.id ?? ""))
+
+        const studentFees = safeFees.filter((f) => {
+          const feeName = normalize(f.student || f.student_name || f.studentName)
+          const feeSid = normalize(String(f.student_id ?? ""))
+          return feeName === normalize(name) || feeName.includes(normalize(name)) || (sid && feeSid === sid)
+        })
+
+        const studentAttendance = safeAttendance.filter((a) => {
+          const attName = normalize(a.student || a.student_name || a.name)
+          const attSid = normalize(String(a.student_id ?? ""))
+          return attName === normalize(name) || attName.includes(normalize(name)) || (sid && attSid === sid)
+        })
+
+        const studentPaid = studentFees.reduce((sum, f) => sum + toNum(f.paid), 0)
+        const studentExpected = studentFees.reduce((sum, f) => sum + toNum(f.amount), 0)
+        const balance = Math.max(0, studentExpected - studentPaid)
+
+        const present = studentAttendance.filter((a) => normalize(a.status) === "present").length
+        const attRate = studentAttendance.length ? Math.round((present / studentAttendance.length) * 100) : 100
+
+        let risk = 0
+        if (balance > 0) risk += 35
+        if (attRate < 70) risk += 40
+        if (attRate < 50) risk += 15
+        if (!studentFees.length) risk += 5
+
+        return {
+          name,
+          className,
+          balance,
+          attendanceRate: attRate,
+          risk: Math.min(100, risk),
+        }
+      })
+      .sort((a, b) => b.risk - a.risk)
+      .slice(0, 8)
+
+    const boardInsight =
+      attendanceRate < 60
+        ? "Attendance is under pressure and needs intervention."
+        : overdueCount > 0
+        ? "Finance collection is active, but overdue balances need follow-up."
+        : "School operations are stable across finance and attendance."
+
+    const actions = [
+      overdueCount > 0 ? "Follow up overdue fee accounts" : "No overdue fee action required",
+      attendanceRate < 70 ? "Review low-attendance classes" : "Attendance looks healthy",
+      topRiskStudents.length > 0 ? "Monitor high-risk students" : "Risk level is low",
+    ]
+
+    return {
+      totalStudents,
+      totalDue,
+      totalPaid,
+      outstanding,
+      collectionRate,
+      attendanceRate,
+      presentCount,
+      absentCount,
+      lateCount,
+      overdueCount,
+      classRevenueRows: topClasses,
+      severityCounts,
+      topRiskStudents,
+      overdueFees: overdueFees
+        .map((f) => ({
+          student: getStudentName(f),
+          className: getClassName(f),
+          amount: toNum(f.amount),
+          paid: toNum(f.paid),
+          balance: Math.max(0, toNum(f.amount) - toNum(f.paid)),
+        }))
+        .slice(0, 10),
+      boardInsight,
+      actions,
+      activeAlerts: safeAlerts.length,
+      latestAlerts: safeAlerts.slice(0, 8),
+    }
+  }, [students, fees, attendance, alerts])
+
+  const generateBoardPDF = () => {
+    const doc = new jsPDF()
+    let y = 16
+
+    const addLine = (text, size = 12, color = "#000000", gap = 8) => {
+      doc.setFontSize(size)
+      doc.setTextColor(color)
+      doc.text(text, 14, y)
+      y += gap
+      if (y > 275) {
+        doc.addPage()
+        y = 16
+      }
+    }
+
+    const addWrapped = (label, value) => {
+      const text = `${label}: ${value}`
+      const lines = doc.splitTextToSize(text, 180)
+      doc.text(lines, 14, y)
+      y += lines.length * 6 + 2
+      if (y > 275) {
+        doc.addPage()
+        y = 16
+      }
+    }
+
+    addLine("SCHOOL BOARD REPORT", 18, "#111111", 12)
+    addLine(`Generated: ${new Date().toLocaleString()}`, 10, "#555555", 10)
+    addLine(" ", 10, "#ffffff", 6)
+
+    addWrapped("Total Students", report.totalStudents)
+    addWrapped("Revenue Collected", report.totalPaid)
+    addWrapped("Expected Revenue", report.totalDue)
+    addWrapped("Outstanding Balance", report.outstanding)
+    addWrapped("Collection Rate", `${report.collectionRate}%`)
+    addWrapped("Attendance Rate", `${report.attendanceRate}%`)
+    addWrapped("Overdue Fee Records", report.overdueCount)
+    addWrapped("Active Alerts", report.activeAlerts)
+
+    addLine(" ", 10, "#ffffff", 6)
+    addLine("BOARD INSIGHT", 14, "#111111", 10)
+    const insightLines = doc.splitTextToSize(report.boardInsight, 180)
+    doc.text(insightLines, 14, y)
+    y += insightLines.length * 6 + 4
+
+    addLine(" ", 10, "#ffffff", 6)
+    addLine("RECOMMENDED ACTIONS", 14, "#111111", 10)
+    report.actions.forEach((a) => {
+      const lines = doc.splitTextToSize(`• ${a}`, 180)
+      doc.text(lines, 14, y)
+      y += lines.length * 6 + 2
+    })
+
+    addLine(" ", 10, "#ffffff", 6)
+    addLine("TOP RISK STUDENTS", 14, "#111111", 10)
+    report.topRiskStudents.slice(0, 6).forEach((s) => {
+      addWrapped(`${s.name} (${s.className})`, `Risk ${s.risk}/100 | Balance ${s.balance} | Attendance ${s.attendanceRate}%`)
+    })
+
+    doc.save("school-board-report.pdf")
+  }
+
+  if (loading) {
     return (
-      <div style={{
-        minHeight: "100vh",
-        background: "#050816",
-        color: "#93c5fd",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center"
-      }}>
-        📊 Generating institutional intelligence report...
+      <div style={styles.loading}>
+        📊 Loading Reports Dashboard...
       </div>
     )
   }
 
+  const revenueChart = {
+    labels: ["Paid", "Outstanding"],
+    datasets: [
+      {
+        label: "Finance",
+        data: [report.totalPaid, report.outstanding],
+        backgroundColor: ["#22c55e", "#ef4444"],
+      },
+    ],
+  }
+
+  const attendanceChart = {
+    labels: ["Present", "Absent", "Late"],
+    datasets: [
+      {
+        label: "Attendance",
+        data: [report.presentCount, report.absentCount, report.lateCount],
+        backgroundColor: ["#22c55e", "#ef4444", "#f59e0b"],
+      },
+    ],
+  }
+
+  const classRevenueChart = {
+    labels: report.classRevenueRows.map(([name]) => name),
+    datasets: [
+      {
+        label: "Paid by Class",
+        data: report.classRevenueRows.map(([, value]) => value),
+        backgroundColor: "#6366f1",
+      },
+    ],
+  }
+
+  const alertsChart = {
+    labels: ["Critical", "High", "Medium", "Low"],
+    datasets: [
+      {
+        data: [
+          report.severityCounts.critical,
+          report.severityCounts.high,
+          report.severityCounts.medium,
+          report.severityCounts.low,
+        ],
+        backgroundColor: ["#ef4444", "#f59e0b", "#38bdf8", "#22c55e"],
+      },
+    ],
+  }
+
   return (
-    <div style={{
-      padding: 24,
-      minHeight: "100vh",
-      background: "#050816",
-      color: "white"
-    }}>
-
-      <Header />
-
-      {/* KPI STRIP */}
-      <KPIGrid data={report} />
-
-      {/* MAIN GRID */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "2fr 1fr",
-        gap: 16,
-        marginTop: 18
-      }}>
-
-        {/* LEFT: INSIGHT REPORT */}
-        <Panel title="📊 EXECUTIVE REPORT (AI GENERATED)">
-
-          <div style={{
-            fontSize: 13,
-            lineHeight: 1.7,
-            color: "#cbd5e1"
-          }}>
-            {report.executiveSummary}
+    <div style={styles.wrapper}>
+      <div style={styles.header}>
+        <div>
+          <div style={styles.title}>📊 REPORTS COMMAND CENTER</div>
+          <div style={styles.subtitle}>
+            Board reports, finance intelligence, attendance trends, alerts, and school health
           </div>
+        </div>
 
-        </Panel>
-
-        {/* RIGHT SIDE */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-
-          <Panel title="📉 FINANCIAL TREND SCORE">
-            <Score value={report.financialTrend} />
-          </Panel>
-
-          <Panel title="🎓 ACADEMIC STABILITY INDEX">
-            <Score value={report.academicStability} />
-          </Panel>
-
-          <Panel title="⚠️ SYSTEM VOLATILITY">
-            <Score value={report.volatility} />
-          </Panel>
-
+        <div style={styles.headerActions}>
+          <button onClick={loadAll} style={styles.secondaryBtn}>
+            Refresh Data
+          </button>
+          <button onClick={generateBoardPDF} style={styles.primaryBtn}>
+            📄 Export Board PDF
+          </button>
         </div>
       </div>
 
-      {/* DEEP ANALYSIS SECTION */}
-      <div style={{
-        marginTop: 18,
-        display: "grid",
-        gridTemplateColumns: "1fr 1fr",
-        gap: 16
-      }}>
+      <div style={styles.grid}>
+        <Card label="Students" value={report.totalStudents} color="#38bdf8" />
+        <Card label="Revenue" value={report.totalPaid} color="#22c55e" />
+        <Card label="Outstanding" value={report.outstanding} color="#ef4444" />
+        <Card label="Attendance" value={`${report.attendanceRate}%`} color="#f59e0b" />
+      </div>
 
-        <Panel title="📈 KEY INSIGHTS">
+      <div style={styles.main}>
+        <div style={styles.panel}>
+          <div style={styles.panelTitle}>🧠 Board Insight</div>
+          <div style={styles.insightBox}>{report.boardInsight}</div>
 
-          <ul style={{ fontSize: 13, lineHeight: 1.8 }}>
-            {report.insights.map((i, idx) => (
-              <li key={idx}>• {i}</li>
+          <div style={styles.panelTitle}>🎯 Recommended Actions</div>
+          <ul style={styles.list}>
+            {report.actions.map((a, i) => (
+              <li key={i}>→ {a}</li>
             ))}
           </ul>
 
-        </Panel>
+          <div style={styles.panelTitle}>⚠️ Alerts Summary</div>
+          <div style={styles.metricsRow}>
+            <MetricChip label="Active Alerts" value={report.activeAlerts} />
+            <MetricChip label="Overdue Fees" value={report.overdueCount} />
+            <MetricChip label="Risk Students" value={report.topRiskStudents.length} />
+          </div>
+        </div>
 
-        <Panel title="🎯 RECOMMENDED STRATEGY">
+        <div style={styles.panel}>
+          <div style={styles.panelTitle}>📊 Charts</div>
+          <div style={styles.chartGrid}>
+            <div style={styles.chartCard}>
+              <div style={styles.chartLabel}>Revenue Overview</div>
+              <Bar data={revenueChart} />
+            </div>
 
-          <ul style={{ fontSize: 13, lineHeight: 1.8 }}>
-            {report.actions.map((a, idx) => (
-              <li key={idx}>→ {a}</li>
+            <div style={styles.chartCard}>
+              <div style={styles.chartLabel}>Attendance Breakdown</div>
+              <Bar data={attendanceChart} />
+            </div>
+
+            <div style={styles.chartCard}>
+              <div style={styles.chartLabel}>Revenue by Class</div>
+              <Bar data={classRevenueChart} />
+            </div>
+
+            <div style={styles.chartCard}>
+              <div style={styles.chartLabel}>Alert Severity</div>
+              <Doughnut data={alertsChart} />
+            </div>
+          </div>
+        </div>
+
+        <div style={styles.panel}>
+          <div style={styles.panelTitle}>🚨 Risk & Alerts</div>
+
+          <div style={styles.subTitle}>High Risk Students</div>
+          <div style={styles.scrollList}>
+            {report.topRiskStudents.length === 0 && (
+              <div style={styles.empty}>No risk detected</div>
+            )}
+
+            {report.topRiskStudents.map((s, i) => (
+              <div key={i} style={styles.riskRow}>
+                <div>
+                  <div style={styles.name}>{s.name}</div>
+                  <div style={styles.sub}>{s.className}</div>
+                </div>
+                <div style={{ ...styles.riskScore, color: s.risk > 70 ? "#ef4444" : s.risk > 40 ? "#f59e0b" : "#22c55e" }}>
+                  {s.risk}%
+                </div>
+              </div>
             ))}
-          </ul>
+          </div>
 
-        </Panel>
+          <div style={styles.subTitle}>Latest Alerts</div>
+          <div style={styles.scrollList}>
+            {report.latestAlerts.length === 0 && (
+              <div style={styles.empty}>No active alerts</div>
+            )}
 
+            {report.latestAlerts.map((a, i) => (
+              <div key={i} style={styles.alertRow}>
+                <div style={styles.name}>
+                  {a.type || "alert"}
+                </div>
+                <div style={styles.sub}>
+                  {a.message || a.text || "No message"}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={styles.bottom}>
+        <div style={styles.bottomGrid}>
+          <div style={styles.panel}>
+            <div style={styles.panelTitle}>📚 Overdue Fee Records</div>
+            <div style={styles.table}>
+              {report.overdueFees.length === 0 && (
+                <div style={styles.empty}>No overdue fees</div>
+              )}
+
+              {report.overdueFees.map((f, i) => (
+                <div key={i} style={styles.tableRow}>
+                  <div>
+                    <div style={styles.name}>{f.student}</div>
+                    <div style={styles.sub}>{f.className}</div>
+                  </div>
+                  <div style={styles.amount}>
+                    {f.paid} / {f.amount}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={styles.panel}>
+            <div style={styles.panelTitle}>📈 Class Revenue Ranking</div>
+            <div style={styles.table}>
+              {report.classRevenueRows.length === 0 && (
+                <div style={styles.empty}>No class revenue data</div>
+              )}
+
+              {report.classRevenueRows.map(([cls, value], i) => (
+                <div key={i} style={styles.tableRow}>
+                  <div>
+                    <div style={styles.name}>{cls}</div>
+                    <div style={styles.sub}>Revenue contribution</div>
+                  </div>
+                  <div style={styles.amount}>{value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
 }
 
-/* ================= HEADER ================= */
-
-function Header() {
+function Card({ label, value, color = "#38bdf8" }) {
   return (
-    <div style={{
-      marginBottom: 16,
-      borderBottom: "1px solid rgba(148,163,184,0.2)",
-      paddingBottom: 12
-    }}>
-      <div style={{ fontSize: 22, fontWeight: 900 }}>
-        📊 SCHOOL EXECUTIVE INTELLIGENCE REPORTS
-      </div>
-      <div style={{ fontSize: 12, color: "#94a3b8" }}>
-        AI-generated institutional analysis, forecasting & strategic guidance
-      </div>
+    <div style={styles.card}>
+      <div style={styles.cardLabel}>{label}</div>
+      <div style={{ ...styles.cardValue, color }}>{value}</div>
     </div>
   )
 }
 
-/* ================= KPI GRID ================= */
-
-function KPIGrid({ data }) {
+function MetricChip({ label, value }) {
   return (
-    <div style={{
-      display: "grid",
-      gridTemplateColumns: "repeat(4, 1fr)",
-      gap: 12
-    }}>
-      <KPI label="Revenue Health" value={data.revenueHealth + "%"} color="#22c55e" />
-      <KPI label="Attendance Quality" value={data.attendanceQuality + "%"} />
-      <KPI label="Risk Exposure" value={data.riskExposure + "%"} color="#ef4444" />
-      <KPI label="Growth Score" value={data.growthScore + "%"} color="#38bdf8" />
+    <div style={styles.metricChip}>
+      <div style={styles.metricChipLabel}>{label}</div>
+      <div style={styles.metricChipValue}>{value}</div>
     </div>
   )
 }
 
-function KPI({ label, value, color = "white" }) {
-  return (
-    <div style={{
-      background: "#0f172a",
-      border: "1px solid rgba(148,163,184,0.2)",
-      borderRadius: 14,
-      padding: 14
-    }}>
-      <div style={{ fontSize: 11, color: "#94a3b8" }}>
-        {label}
-      </div>
-      <div style={{ fontSize: 20, fontWeight: 900, color }}>
-        {value}
-      </div>
-    </div>
-  )
-}
+const styles = {
+  wrapper: {
+    padding: 20,
+    background: "#050816",
+    color: "white",
+    minHeight: "100vh",
+    overflow: "auto",
+    fontFamily: "Inter",
+  },
 
-/* ================= PANEL ================= */
+  loading: {
+    padding: 24,
+    color: "#60a5fa",
+    background: "#050816",
+    minHeight: "100vh",
+  },
 
-function Panel({ title, children }) {
-  return (
-    <div style={{
-      background: "#0f172a",
-      border: "1px solid rgba(148,163,184,0.2)",
-      borderRadius: 14,
-      padding: 14
-    }}>
-      <div style={{
-        fontSize: 12,
-        fontWeight: 800,
-        marginBottom: 10,
-        color: "#cbd5e1"
-      }}>
-        {title}
-      </div>
-      {children}
-    </div>
-  )
-}
+  header: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottom: "1px solid rgba(255,255,255,0.08)",
+  },
 
-/* ================= SCORE ================= */
+  headerActions: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+  },
 
-function Score({ value }) {
-  const color =
-    value > 75 ? "#22c55e" :
-    value > 50 ? "#f59e0b" :
-    "#ef4444"
+  title: {
+    fontSize: 22,
+    fontWeight: 900,
+  },
 
-  return (
-    <div style={{
-      fontSize: 38,
-      fontWeight: 900,
-      textAlign: "center",
-      color
-    }}>
-      {value}/100
-    </div>
-  )
-}
+  subtitle: {
+    fontSize: 12,
+    opacity: 0.6,
+    marginTop: 4,
+  },
 
-/* ================= ENGINE ================= */
+  primaryBtn: {
+    padding: "10px 14px",
+    borderRadius: 10,
+    border: "none",
+    background: "linear-gradient(135deg,#6366f1,#22c55e)",
+    color: "white",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
 
-function buildReportEngine(students, fees, attendance) {
+  secondaryBtn: {
+    padding: "10px 14px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "#0f172a",
+    color: "white",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
 
-  const totalRevenue = fees.reduce((a, f) => a + Number(f.paid || 0), 0)
-  const expectedRevenue = fees.reduce((a, f) => a + Number(f.amount || 0), 0)
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4,1fr)",
+    gap: 10,
+    marginBottom: 12,
+  },
 
-  const revenueHealth = expectedRevenue
-    ? Math.round((totalRevenue / expectedRevenue) * 100)
-    : 0
+  card: {
+    background: "#0f172a",
+    padding: 12,
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.08)",
+  },
 
-  const attendanceRate =
-    students.length
-      ? Math.round((attendance.filter(a => a.status === "present").length / students.length) * 100)
-      : 0
+  cardLabel: {
+    fontSize: 11,
+    opacity: 0.6,
+  },
 
-  const riskExposure =
-    Math.min(100, (100 - revenueHealth) + (100 - attendanceRate) / 2)
+  cardValue: {
+    fontSize: 20,
+    fontWeight: 900,
+    marginTop: 6,
+  },
 
-  const growthScore = Math.max(0, 100 - riskExposure)
+  main: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1.4fr 1fr",
+    gap: 12,
+    alignItems: "start",
+  },
 
-  const volatility = Math.round(
-    (Math.abs(revenueHealth - attendanceRate) / 2)
-  )
+  panel: {
+    background: "#0f172a",
+    padding: 12,
+    borderRadius: 14,
+    border: "1px solid rgba(255,255,255,0.08)",
+  },
 
-  const insights = [
-    revenueHealth < 60
-      ? "Revenue collection efficiency is below sustainable threshold."
-      : "Revenue flow is stable and predictable.",
+  panelTitle: {
+    fontSize: 12,
+    fontWeight: 800,
+    marginBottom: 10,
+  },
 
-    attendanceRate < 70
-      ? "Attendance inconsistency may impact academic outcomes."
-      : "Attendance patterns are stable across cohorts.",
+  insightBox: {
+    padding: 12,
+    borderRadius: 10,
+    background: "rgba(99,102,241,0.08)",
+    marginBottom: 12,
+    lineHeight: 1.6,
+  },
 
-    riskExposure > 50
-      ? "System-wide risk exposure is elevated across multiple domains."
-      : "System risk exposure remains within safe operational limits."
-  ]
+  list: {
+    margin: 0,
+    paddingLeft: 18,
+    lineHeight: 1.8,
+    fontSize: 13,
+  },
 
-  const actions = []
+  metricsRow: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3,1fr)",
+    gap: 8,
+    marginTop: 10,
+  },
 
-  if (riskExposure > 60) {
-    actions.push("Trigger financial recovery plan")
-    actions.push("Activate student engagement intervention system")
-    actions.push("Escalate monitoring frequency to real-time mode")
-  } else {
-    actions.push("Maintain current operational strategy")
-    actions.push("Continue predictive monitoring")
-    actions.push("Optimize efficiency workflows")
-  }
+  metricChip: {
+    padding: 10,
+    borderRadius: 10,
+    background: "rgba(255,255,255,0.03)",
+    border: "1px solid rgba(255,255,255,0.06)",
+  },
 
-  return {
-    revenueHealth,
-    attendanceQuality: attendanceRate,
-    riskExposure: Math.round(riskExposure),
-    growthScore: Math.round(growthScore),
-    volatility,
-    executiveSummary:
-      `The institution is operating at ${growthScore}% strategic efficiency. ` +
-      `Key performance drivers include revenue health (${revenueHealth}%) and attendance stability (${attendanceRate}%). ` +
-      `Overall system volatility is ${volatility}%, indicating ${
-        volatility > 30 ? "high uncertainty" : "controlled stability"
-      }.`,
-    insights,
-    actions
-  }
+  metricChipLabel: {
+    fontSize: 11,
+    opacity: 0.6,
+  },
+
+  metricChipValue: {
+    fontSize: 18,
+    fontWeight: 900,
+    marginTop: 4,
+  },
+
+  chartGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 12,
+  },
+
+  chartCard: {
+    padding: 12,
+    borderRadius: 12,
+    background: "rgba(255,255,255,0.03)",
+    border: "1px solid rgba(255,255,255,0.06)",
+    minHeight: 260,
+  },
+
+  chartLabel: {
+    fontSize: 12,
+    fontWeight: 800,
+    marginBottom: 10,
+  },
+
+  scrollList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+    maxHeight: 220,
+    overflowY: "auto",
+    marginBottom: 14,
+  },
+
+  riskRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    padding: 10,
+    borderRadius: 10,
+    background: "rgba(255,255,255,0.03)",
+  },
+
+  alertRow: {
+    padding: 10,
+    borderRadius: 10,
+    background: "rgba(59,130,246,0.08)",
+  },
+
+  subTitle: {
+    fontSize: 12,
+    fontWeight: 800,
+    marginBottom: 10,
+    marginTop: 10,
+  },
+
+  bottom: {
+    marginTop: 12,
+  },
+
+  bottomGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 12,
+  },
+
+  table: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+
+  tableRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    padding: 10,
+    borderRadius: 10,
+    background: "rgba(255,255,255,0.03)",
+  },
+
+  name: {
+    fontWeight: 700,
+  },
+
+  sub: {
+    fontSize: 11,
+    opacity: 0.6,
+    marginTop: 3,
+  },
+
+  amount: {
+    fontWeight: 900,
+    whiteSpace: "nowrap",
+  },
+
+  empty: {
+    fontSize: 13,
+    opacity: 0.6,
+    padding: "6px 0",
+  },
+  wrapper: {
+  padding: 20,
+  background: "#050816",
+  color: "white",
+  minHeight: "100vh",
+  overflow: "auto",
+  fontFamily: "Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial",
+  letterSpacing: "0.2px",
+},
+title: {
+  fontSize: 22,
+  fontWeight: 800,
+  letterSpacing: "0.5px",
+},
+
+subtitle: {
+  fontSize: 12,
+  opacity: 0.65,
+  letterSpacing: "0.3px",
+},
+
+cardValue: {
+  fontSize: 20,
+  fontWeight: 800,
+  letterSpacing: "0.3px",
+},
 }

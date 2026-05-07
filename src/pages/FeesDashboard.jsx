@@ -1,302 +1,774 @@
-import { useEffect, useState } from "react"
-import { db } from "../db"
+// import { useEffect, useMemo, useState } from "react"
+// import { supabase } from "../lib/supabase"
+// import { Bar } from "react-chartjs-2"
+// import jsPDF from "jspdf"
+// import {
+//   Chart as ChartJS,
+//   CategoryScale,
+//   LinearScale,
+//   BarElement,
+//   Title,
+//   Tooltip,
+//   Legend,
+// } from "chart.js"
+
+// ChartJS.register(
+//   CategoryScale,
+//   LinearScale,
+//   BarElement,
+//   Title,
+//   Tooltip,
+//   Legend
+// )
+
+// export default function FeesDashboard() {
+
+//   const [fees, setFees] = useState([])
+//   const [events, setEvents] = useState([])
+
+//   const [student, setStudent] = useState("")
+//   const [amount, setAmount] = useState("")
+
+//   /* ---------------- LOAD ---------------- */
+//   const loadFees = async () => {
+//     const { data } = await supabase.from("fees").select("*")
+//     setFees(data || [])
+//   }
+
+//   useEffect(() => {
+//     loadFees()
+
+  
+//   useEffect(() => {
+//     const stopEngine = startEngineLoop(5000) // runs every 5 sec
+
+//     return () => stopEngine()
+//   }, [])
+
+//     const channel = supabase
+//       .channel("fees-live")
+//       .on(
+//         "postgres_changes",
+//         { event: "*", schema: "public", table: "fees" },
+//         () => loadFees()
+//       )
+//       .subscribe()
+
+//     return () => supabase.removeChannel(channel)
+//   }, [])
+
+//   /* ---------------- DATA ---------------- */
+//   const totalPaid = fees.reduce((a, f) => a + Number(f.paid || 0), 0)
+//   const totalDue = fees.reduce((a, f) => a + Number(f.amount || 0), 0)
+//   const overdue = fees.filter(f => (f.amount - f.paid) > 0).length
+
+//   const students = useMemo(
+//     () => [...new Set(fees.map(f => f.student))],
+//     [fees]
+//   )
+
+//   /* ---------------- PAYMENT ---------------- */
+//   const recordPayment = async (selectedStudent) => {
+//     if (!selectedStudent || !amount) return
+
+//     const record = fees.find(f => f.student === selectedStudent)
+
+//     await supabase
+//       .from("fees")
+//       .update({
+//         paid: Number(record.paid || 0) + Number(amount)
+//       })
+//       .eq("student", selectedStudent)
+
+//     generateReceipt(selectedStudent, amount)
+
+//     setEvents(prev => [
+//       {
+//         time: new Date().toLocaleTimeString(),
+//         msg: `💰 Payment: ${selectedStudent}`
+//       },
+//       ...prev
+//     ])
+
+//     setAmount("")
+//     setStudent("")
+//     loadFees()
+//   }
+
+//   /* ---------------- PDF ---------------- */
+//   const generateReceipt = (name, amt) => {
+//     const doc = new jsPDF()
+//     doc.text("SCHOOL RECEIPT", 20, 20)
+//     doc.text(`Student: ${name}`, 20, 40)
+//     doc.text(`Amount: ${amt}`, 20, 50)
+//     doc.text(`Date: ${new Date().toLocaleString()}`, 20, 60)
+//     doc.save(`receipt_${name}.pdf`)
+//   }
+
+//   /* ---------------- CHART ---------------- */
+//   const chartData = {
+//     labels: fees.map(f => f.class),
+//     datasets: [
+//       {
+//         label: "Payments",
+//         data: fees.map(f => f.paid),
+//         backgroundColor: "#6366f1",
+//       }
+//     ]
+//   }
+
+//   return (
+//     <div style={styles.wrapper}>
+
+//       {/* HEADER */}
+//       <div style={styles.header}>
+//         <div style={styles.title}>💰 FEES OS V4</div>
+//         <div style={styles.subtitle}>
+//           Smart Accounting System for Schools
+//         </div>
+//       </div>
+
+//       {/* KPI */}
+//       <div style={styles.grid}>
+//         <Card label="Revenue" value={totalPaid} color="#22c55e" />
+//         <Card label="Expected" value={totalDue} color="#38bdf8" />
+//         <Card label="Overdue" value={overdue} color="#ef4444" />
+//         <Card label="Records" value={fees.length} color="#f59e0b" />
+//       </div>
+
+//       {/* MAIN */}
+//       <div style={styles.main}>
+
+//         {/* PAYMENT PANEL */}
+//         <div style={styles.panel}>
+//           <div style={styles.panelTitle}>⚡ Quick Payment</div>
+
+//           {/* SMART INPUT */}
+//           <SmartStudentInput
+//   students={students.map(s => s.name)}   // 🔥 IMPORTANT FIX
+//   value={student}
+//   setValue={setStudent}
+// />
+
+//           <input
+//             placeholder="Amount"
+//             value={amount}
+//             onChange={e => setAmount(e.target.value)}
+//             style={styles.input}
+//           />
+
+//           <button
+//             onClick={() => recordPayment(student)}
+//             style={styles.btn}
+//           >
+//             💳 Record + Receipt
+//           </button>
+//         </div>
+
+//         {/* CHARTS */}
+//         <div style={styles.panel}>
+//           <div style={styles.panelTitle}>📊 Analytics</div>
+//           <Bar data={chartData} />
+//         </div>
+
+//         {/* LIVE FEED */}
+//         <div style={styles.panel}>
+//           <div style={styles.panelTitle}>📡 Audit Trail</div>
+
+//           {events.map((e, i) => (
+//             <div key={i} style={styles.event}>
+//               [{e.time}] {e.msg}
+//             </div>
+//           ))}
+//         </div>
+
+//       </div>
+
+//       {/* TABLE */}
+//       <div style={styles.bottom}>
+//         <div style={styles.panelTitle}>📚 Fee Records</div>
+
+//         {fees.map((f, i) => (
+//           <div key={i} style={styles.row}>
+//             <div>
+//               <div>{f.student}</div>
+//               <div style={{ fontSize: 11, opacity: 0.6 }}>
+//                 {f.class}
+//               </div>
+//             </div>
+
+//             <div>
+//               {f.paid} / {f.amount}
+//             </div>
+//           </div>
+//         ))}
+//       </div>
+
+//     </div>
+//   )
+// }
+
+// /* ---------------- SMART INPUT ---------------- */
+
+// function SmartStudentInput({ students, value, setValue }) {
+//   const [open, setOpen] = useState(false)
+
+//   const filtered = students.filter(s =>
+//     s.toLowerCase().includes((value || "").toLowerCase())
+//   )
+
+//   return (
+//     <div style={{ position: "relative" }}>
+
+//       {/* INPUT */}
+//       <input
+//         value={value}
+//         placeholder="Search student..."
+//         onChange={(e) => {
+//           setValue(e.target.value)   // ✅ SINGLE SOURCE OF TRUTH
+//           setOpen(true)
+//         }}
+//         onFocus={() => setOpen(true)}
+//         style={styles.input}
+//       />
+
+//       {/* DROPDOWN */}
+//       {open && value && filtered.length > 0 && (
+//         <div style={styles.dropdown}>
+
+//           {filtered.map((s, i) => (
+//             <div
+//               key={i}
+//               style={styles.option}
+//               onClick={() => {
+//                 setValue(s)     // ✅ inserts name properly
+//                 setOpen(false)
+//               }}
+//             >
+//               👤 {s}
+//             </div>
+//           ))}
+
+//         </div>
+//       )}
+
+//     </div>
+//   )
+// }
+
+// /* ---------------- CARD ---------------- */
+
+// function Card({ label, value, color }) {
+//   return (
+//     <div style={styles.card}>
+//       <div style={styles.cardLabel}>{label}</div>
+//       <div style={{ ...styles.cardValue, color }}>
+//         {value}
+//       </div>
+//     </div>
+//   )
+// }
+
+// /* ---------------- STYLES ---------------- */
+
+// const styles = {
+//   wrapper: {
+//     padding: 20,
+//     background: "#050816",
+//     height: "100vh",
+//     overflow: "auto",
+//     color: "white",
+//   },
+
+//   header: { marginBottom: 12 },
+
+//   title: { fontSize: 22, fontWeight: 900 },
+
+//   subtitle: { fontSize: 12, opacity: 0.6 },
+
+//   grid: {
+//     display: "grid",
+//     gridTemplateColumns: "repeat(4,1fr)",
+//     gap: 10,
+//     marginBottom: 12,
+//   },
+
+//   card: {
+//     background: "#0f172a",
+//     padding: 12,
+//     borderRadius: 10,
+//   },
+
+//   cardLabel: { fontSize: 11, opacity: 0.6 },
+
+//   cardValue: { fontSize: 20, fontWeight: 900 },
+
+//   main: {
+//     display: "grid",
+//     gridTemplateColumns: "1fr 1fr 1fr",
+//     gap: 12,
+//   },
+
+//   panel: {
+//     background: "#0f172a",
+//     padding: 12,
+//     borderRadius: 12,
+//   },
+
+//   bottom: {
+//     marginTop: 12,
+//     background: "#0f172a",
+//     padding: 12,
+//     borderRadius: 12,
+//   },
+
+//   panelTitle: {
+//     fontSize: 12,
+//     fontWeight: 800,
+//     marginBottom: 10,
+//   },
+
+//   input: {
+//     width: "100%",
+//     padding: 10,
+//     marginBottom: 8,
+//     borderRadius: 8,
+//     background: "#020617",
+//     color: "white",
+//     border: "1px solid rgba(255,255,255,0.1)",
+//   },
+
+//   btn: {
+//     width: "100%",
+//     padding: 10,
+//     borderRadius: 8,
+//     background: "#6366f1",
+//     color: "white",
+//     border: "none",
+//     fontWeight: 800,
+//     cursor: "pointer",
+//   },
+
+//   row: {
+//     display: "flex",
+//     justifyContent: "space-between",
+//     padding: 8,
+//     marginBottom: 6,
+//     background: "rgba(255,255,255,0.03)",
+//     borderRadius: 8,
+//   },
+
+//   event: {
+//     fontSize: 12,
+//     color: "#93c5fd",
+//     marginBottom: 6,
+//   },
+
+//   dropdown: {
+//     position: "absolute",
+//     top: "100%",
+//     left: 0,
+//     right: 0,
+//     background: "#0f172a",
+//     border: "1px solid rgba(255,255,255,0.08)",
+//     borderRadius: 10,
+//     zIndex: 10,
+//     maxHeight: 200,
+//     overflowY: "auto",
+//   },
+
+//   option: {
+//     padding: 10,
+//     cursor: "pointer",
+//     fontSize: 13,
+//     borderBottom: "1px solid rgba(255,255,255,0.05)",
+//   },
+// }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+import { useEffect, useMemo, useState } from "react"
+import { supabase } from "../lib/supabase"
+import { Bar } from "react-chartjs-2"
+import jsPDF from "jspdf"
+
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+} from "chart.js"
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+)
+
+/* ---------------- SMART INPUT ---------------- */
+function SmartStudentInput({ students, value, setValue }) {
+  const [open, setOpen] = useState(false)
+
+  const filtered = useMemo(() => {
+    if (!value) return students
+    return students.filter((s) =>
+      s.toLowerCase().includes(value.toLowerCase())
+    )
+  }, [value, students])
+
+  return (
+    <div style={{ position: "relative" }}>
+      <input
+        value={value}
+        placeholder="Search student..."
+        onChange={(e) => {
+          setValue(e.target.value)
+          setOpen(true)
+        }}
+        onFocus={() => setOpen(true)}
+        style={styles.input}
+      />
+
+      {open && filtered.length > 0 && (
+        <div style={styles.dropdown}>
+          {filtered.map((s, i) => (
+            <div
+              key={i}
+              style={styles.option}
+              onClick={() => {
+                setValue(s)
+                setOpen(false)
+              }}
+            >
+              👤 {s}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ---------------- MAIN DASHBOARD ---------------- */
 
 export default function FeesDashboard() {
-  const [data, setData] = useState(null)
+  const [fees, setFees] = useState([])
+  const [student, setStudent] = useState("")
+  const [amount, setAmount] = useState("")
+  const [events, setEvents] = useState([])
+
+  /* ---------------- LOAD ---------------- */
+  const loadFees = async () => {
+    const { data } = await supabase.from("fees").select("*")
+    setFees(data || [])
+  }
 
   useEffect(() => {
-    let alive = true
+    loadFees()
 
-    const run = async () => {
-      const students = (await db.students.toArray()) || []
-      const fees = (await db.fees.toArray()) || []
+    const channel = supabase
+      .channel("fees-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "fees" },
+        () => loadFees()
+      )
+      .subscribe()
 
-      if (!alive) return
-      setData(buildFeesEngine(students, fees))
-    }
-
-    run()
-    const t = setInterval(run, 3000)
-
-    return () => {
-      alive = false
-      clearInterval(t)
-    }
+    return () => supabase.removeChannel(channel)
   }, [])
 
-  if (!data) {
-    return (
-      <div style={{
-        minHeight: "100vh",
-        background: "#050816",
-        color: "#93c5fd",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center"
-      }}>
-        💸 Loading financial intelligence engine...
-      </div>
-    )
+  /* ---------------- DERIVED DATA ---------------- */
+  const students = useMemo(
+    () => [...new Set(fees.map((f) => f.student))],
+    [fees]
+  )
+
+  const totalPaid = fees.reduce((a, f) => a + Number(f.paid || 0), 0)
+  const totalDue = fees.reduce((a, f) => a + Number(f.amount || 0), 0)
+  const overdue = fees.filter((f) => (f.amount - f.paid) > 0).length
+
+  /* ---------------- PAYMENT ---------------- */
+  const recordPayment = async () => {
+    if (!student || !amount) return
+
+    const record = fees.find((f) => f.student === student)
+
+    await supabase
+      .from("fees")
+      .update({
+        paid: Number(record?.paid || 0) + Number(amount),
+      })
+      .eq("student", student)
+
+    generateReceipt(student, amount)
+
+    setEvents((p) => [
+      {
+        time: new Date().toLocaleTimeString(),
+        msg: `Payment recorded: ${student}`,
+      },
+      ...p,
+    ])
+
+    setAmount("")
+    setStudent("")
+    loadFees()
+  }
+
+  /* ---------------- PDF ---------------- */
+  const generateReceipt = (name, amt) => {
+    const doc = new jsPDF()
+    doc.text("SCHOOL RECEIPT", 20, 20)
+    doc.text(`Student: ${name}`, 20, 40)
+    doc.text(`Amount: ${amt}`, 20, 50)
+    doc.text(`Date: ${new Date().toLocaleString()}`, 20, 60)
+    doc.save(`receipt_${name}.pdf`)
+  }
+
+  /* ---------------- CHART ---------------- */
+  const chartData = {
+    labels: fees.map((f) => f.class || "N/A"),
+    datasets: [
+      {
+        label: "Payments",
+        data: fees.map((f) => f.paid || 0),
+        backgroundColor: "#6366f1",
+      },
+    ],
   }
 
   return (
-    <div style={{
-      padding: 24,
-      minHeight: "100vh",
-      background: "#050816",
-      color: "white"
-    }}>
+    <div style={styles.wrapper}>
 
       {/* HEADER */}
-      <Header />
+      <div style={styles.header}>
+        <div style={styles.title}>💰 FEES OS (CLEAN v1)</div>
+        <div style={styles.subtitle}>
+          Stable Accounting System (Supabase Powered)
+        </div>
+      </div>
 
-      {/* KPI STRIP */}
-      <KPIBar data={data} />
+      {/* KPI */}
+      <div style={styles.grid}>
+        <Card label="Revenue" value={totalPaid} color="#22c55e" />
+        <Card label="Expected" value={totalDue} color="#38bdf8" />
+        <Card label="Overdue" value={overdue} color="#ef4444" />
+        <Card label="Records" value={fees.length} color="#f59e0b" />
+      </div>
 
-      {/* MAIN GRID */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "2fr 1fr",
-        gap: 16,
-        marginTop: 18
-      }}>
+      {/* MAIN */}
+      <div style={styles.main}>
 
-        {/* LEFT: REVENUE TABLE */}
-        <Panel title="💸 REVENUE COLLECTION MATRIX">
+        {/* PAYMENT */}
+        <div style={styles.panel}>
+          <div style={styles.panelTitle}>⚡ Quick Payment</div>
 
-          {data.rows.map(r => (
-            <FeeRow key={r.id} r={r} />
-          ))}
+          <SmartStudentInput
+            students={students}
+            value={student}
+            setValue={setStudent}
+          />
 
-        </Panel>
+          <input
+            placeholder="Amount"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            style={styles.input}
+          />
 
-        {/* RIGHT INSIGHTS */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <button onClick={recordPayment} style={styles.btn}>
+            💳 Record Payment
+          </button>
+        </div>
 
-          <Panel title="🔥 FINANCIAL HEALTH SCORE">
-            <BigScore value={data.health} />
-          </Panel>
+        {/* CHART */}
+        <div style={styles.panel}>
+          <div style={styles.panelTitle}>📊 Analytics</div>
+          <Bar data={chartData} />
+        </div>
 
-          <Panel title="🧠 AI FINANCIAL DIAGNOSIS">
-            <div style={{ fontSize: 13, lineHeight: 1.6 }}>
-              {data.insight}
+        {/* AUDIT */}
+        <div style={styles.panel}>
+          <div style={styles.panelTitle}>📡 Audit Trail</div>
+
+          {events.map((e, i) => (
+            <div key={i} style={styles.event}>
+              [{e.time}] {e.msg}
             </div>
-          </Panel>
-
-          <Panel title="⚡ AUTO ACTIONS">
-            <ul style={{ fontSize: 13, lineHeight: 1.8 }}>
-              {data.actions.map((a, i) => (
-                <li key={i}>→ {a}</li>
-              ))}
-            </ul>
-          </Panel>
-
+          ))}
         </div>
+
       </div>
+
+      {/* TABLE */}
+      <div style={styles.bottom}>
+        <div style={styles.panelTitle}>📚 Fee Records</div>
+
+        {fees.map((f, i) => (
+          <div key={i} style={styles.row}>
+            <div>
+              <div>{f.student}</div>
+              <div style={{ fontSize: 11, opacity: 0.6 }}>
+                {f.class}
+              </div>
+            </div>
+
+            <div>
+              {f.paid} / {f.amount}
+            </div>
+          </div>
+        ))}
+      </div>
+
     </div>
   )
 }
 
-/* ================= HEADER ================= */
-
-function Header() {
+/* ---------------- CARD ---------------- */
+function Card({ label, value, color }) {
   return (
-    <div style={{
-      marginBottom: 16,
-      borderBottom: "1px solid rgba(148,163,184,0.2)",
-      paddingBottom: 12
-    }}>
-      <div style={{ fontSize: 22, fontWeight: 900 }}>
-        💸 FINANCIAL CONTROL CENTER
-      </div>
-      <div style={{ fontSize: 12, color: "#94a3b8" }}>
-        Real-time fee collection, risk pressure & revenue intelligence
-      </div>
+    <div style={styles.card}>
+      <div style={styles.cardLabel}>{label}</div>
+      <div style={{ ...styles.cardValue, color }}>{value}</div>
     </div>
   )
 }
 
-/* ================= KPI ================= */
+/* ---------------- STYLES ---------------- */
 
-function KPIBar({ data }) {
-  return (
-    <div style={{
-      display: "grid",
-      gridTemplateColumns: "repeat(4, 1fr)",
-      gap: 12
-    }}>
-      <KPI label="Total Expected" value={`$${data.totalExpected}`} />
-      <KPI label="Collected" value={`$${data.totalPaid}`} color="#22c55e" />
-      <KPI label="Outstanding" value={`$${data.outstanding}`} color="#ef4444" />
-      <KPI label="Collection Rate" value={data.rate + "%"} />
-    </div>
-  )
-}
+const styles = {
+  wrapper: {
+    padding: 20,
+    background: "#050816",
+    height: "100vh",
+    overflow: "auto",
+    color: "white",
+  },
 
-function KPI({ label, value, color = "white" }) {
-  return (
-    <div style={{
-      background: "#0f172a",
-      border: "1px solid rgba(148,163,184,0.2)",
-      borderRadius: 14,
-      padding: 14
-    }}>
-      <div style={{ fontSize: 11, color: "#94a3b8" }}>
-        {label}
-      </div>
-      <div style={{ fontSize: 20, fontWeight: 900, color }}>
-        {value}
-      </div>
-    </div>
-  )
-}
+  header: { marginBottom: 12 },
 
-/* ================= PANEL ================= */
+  title: { fontSize: 22, fontWeight: 900 },
 
-function Panel({ title, children }) {
-  return (
-    <div style={{
-      background: "#0f172a",
-      border: "1px solid rgba(148,163,184,0.2)",
-      borderRadius: 14,
-      padding: 14
-    }}>
-      <div style={{
-        fontSize: 12,
-        fontWeight: 800,
-        marginBottom: 10,
-        color: "#cbd5e1"
-      }}>
-        {title}
-      </div>
-      {children}
-    </div>
-  )
-}
+  subtitle: { fontSize: 12, opacity: 0.6 },
 
-/* ================= BIG SCORE ================= */
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4,1fr)",
+    gap: 10,
+    marginBottom: 12,
+  },
 
-function BigScore({ value }) {
-  const color =
-    value > 75 ? "#22c55e" :
-    value > 50 ? "#f59e0b" :
-    "#ef4444"
+  card: {
+    background: "#0f172a",
+    padding: 12,
+    borderRadius: 10,
+  },
 
-  return (
-    <div style={{
-      fontSize: 42,
-      fontWeight: 900,
-      color,
-      textAlign: "center",
-      padding: 10
-    }}>
-      {value}/100
-    </div>
-  )
-}
+  cardLabel: { fontSize: 11, opacity: 0.6 },
 
-/* ================= ROW ================= */
+  cardValue: { fontSize: 20, fontWeight: 900 },
 
-function FeeRow({ r }) {
-  return (
-    <div style={{
-      display: "flex",
-      justifyContent: "space-between",
-      padding: 10,
-      marginBottom: 8,
-      borderRadius: 10,
-      background: "rgba(255,255,255,0.03)"
-    }}>
-      <div>
-        <div style={{ fontWeight: 700 }}>
-          {r.name}
-        </div>
-        <div style={{ fontSize: 11, color: "#94a3b8" }}>
-          Expected: ${r.expected}
-        </div>
-      </div>
+  main: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr",
+    gap: 12,
+  },
 
-      <div style={{
-        textAlign: "right"
-      }}>
-        <div style={{ color: "#22c55e", fontWeight: 800 }}>
-          ${r.paid}
-        </div>
-        <div style={{
-          fontSize: 11,
-          color: r.balance > 0 ? "#ef4444" : "#22c55e"
-        }}>
-          Balance: ${r.balance}
-        </div>
-      </div>
-    </div>
-  )
-}
+  panel: {
+    background: "#0f172a",
+    padding: 12,
+    borderRadius: 12,
+  },
 
-/* ================= ENGINE ================= */
+  bottom: {
+    marginTop: 12,
+    background: "#0f172a",
+    padding: 12,
+    borderRadius: 12,
+  },
 
-function buildFeesEngine(students, fees) {
-  let totalExpected = 0
-  let totalPaid = 0
+  panelTitle: {
+    fontSize: 12,
+    fontWeight: 800,
+    marginBottom: 10,
+  },
 
-  const rows = students.map(s => {
-    const sFees = fees.filter(f => f.studentId === s.id)
+  input: {
+    width: "100%",
+    padding: 10,
+    marginBottom: 8,
+    borderRadius: 8,
+    background: "#020617",
+    color: "white",
+    border: "1px solid rgba(255,255,255,0.1)",
+  },
 
-    const expected = sFees.reduce((a, f) => a + Number(f.amount || 0), 0)
-    const paid = sFees.reduce((a, f) => a + Number(f.paid || 0), 0)
+  btn: {
+    width: "100%",
+    padding: 10,
+    borderRadius: 8,
+    background: "#6366f1",
+    color: "white",
+    border: "none",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
 
-    const balance = expected - paid
+  row: {
+    display: "flex",
+    justifyContent: "space-between",
+    padding: 8,
+    marginBottom: 6,
+    background: "rgba(255,255,255,0.03)",
+    borderRadius: 8,
+  },
 
-    totalExpected += expected
-    totalPaid += paid
+  event: {
+    fontSize: 12,
+    color: "#93c5fd",
+    marginBottom: 6,
+  },
 
-    return {
-      id: s.id,
-      name: s.name || "Unknown",
-      expected,
-      paid,
-      balance
-    }
-  })
+  dropdown: {
+    position: "absolute",
+    top: "100%",
+    left: 0,
+    right: 0,
+    background: "#0f172a",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: 10,
+    zIndex: 10,
+    maxHeight: 200,
+    overflowY: "auto",
+  },
 
-  const outstanding = totalExpected - totalPaid
-  const rate = totalExpected ? Math.round((totalPaid / totalExpected) * 100) : 0
-  const health = Math.max(0, 100 - Math.round(outstanding / 100))
-
-  let insight = ""
-  let actions = []
-
-  if (rate < 50) {
-    insight = "Critical cashflow risk detected. Collection performance is below sustainable threshold."
-    actions = [
-      "Trigger automated reminders",
-      "Flag top 20 overdue accounts",
-      "Activate payment escalation flow"
-    ]
-  } else if (rate < 80) {
-    insight = "Moderate collection efficiency. System stable but at risk of delayed inflows."
-    actions = [
-      "Optimize reminder frequency",
-      "Segment overdue students",
-      "Improve payment compliance UX"
-    ]
-  } else {
-    insight = "Healthy revenue flow detected. Collection system operating efficiently."
-    actions = [
-      "Maintain current strategy",
-      "Monitor late-payment trends",
-      "Optimize reporting automation"
-    ]
-  }
-
-  return {
-    rows,
-    totalExpected,
-    totalPaid,
-    outstanding,
-    rate,
-    health,
-    insight,
-    actions
-  }
+  option: {
+    padding: 10,
+    cursor: "pointer",
+    fontSize: 13,
+    borderBottom: "1px solid rgba(255,255,255,0.05)",
+  },
 }

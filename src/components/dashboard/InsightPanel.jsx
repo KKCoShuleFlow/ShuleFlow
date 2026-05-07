@@ -49,6 +49,7 @@ export default function InsightPanel({ students, fees }) {
       gridTemplateColumns: "1fr 1fr 1fr",
       gap: 16,
       marginTop: 20
+    
     }}>
 
       {/* 🔴 FINANCE PAIN */}
@@ -104,6 +105,12 @@ function Card({ title, children }) {
         fontWeight: 600,
         marginBottom: 8
       }}>
+
+
+
+
+  
+
         {title}
       </div>
       {children}

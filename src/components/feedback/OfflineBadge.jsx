@@ -29,6 +29,7 @@ export default function OfflineBadge() {
       fontSize: 12
     }}>
       OFFLINE MODE
+
     </div>
   )
 }

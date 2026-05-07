@@ -1,168 +1,194 @@
-import { useEffect, useState } from "react"
-import { runIntelligence } from "../lib/intelligence/engine"
+import { useEffect, useMemo, useState } from "react"
+import { supabase } from "../lib/supabase"
 
 export default function InsightsDashboard() {
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [data, setData] = useState({
+    students: [],
+    fees: [],
+    attendance: [],
+  })
 
   const load = async () => {
-    try {
-      const res = await runIntelligence()
+    const [{ data: s }, { data: f }, { data: a }] = await Promise.all([
+      supabase.from("students").select("*"),
+      supabase.from("fees").select("*"),
+      supabase.from("attendance").select("*"),
+    ])
 
-      if (!res) {
-        setError("AI engine failed to generate insights")
-        return
-      }
-
-      setData(res)
-      setError(null)
-    } catch (err) {
-      console.error(err)
-      setError("Something went wrong")
-    } finally {
-      setLoading(false)
-    }
+    setData({
+      students: s || [],
+      fees: f || [],
+      attendance: a || [],
+    })
   }
 
   useEffect(() => {
     load()
 
-    const t = setInterval(load, 4000) // 🔥 live refresh
+    const channel = supabase
+      .channel("insights-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "fees" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "attendance" }, load)
+      .subscribe()
 
-    return () => clearInterval(t)
+    return () => supabase.removeChannel(channel)
   }, [])
 
-  if (loading) {
-    return (
-      <div style={styles.loading}>
-        🧠 Booting Intelligence Engine...
-      </div>
-    )
-  }
+  /* ---------------- INTELLIGENCE ENGINE ---------------- */
+  const insight = useMemo(() => {
+    const students = data.students
+    const fees = data.fees
+    const attendance = data.attendance
 
-  if (error) {
-    return (
-      <div style={styles.error}>
-        ⚠️ {error}
-      </div>
-    )
-  }
+    const totalStudents = students.length
+
+    const revenue = fees.reduce((a, f) => a + Number(f.paid || 0), 0)
+    const expected = fees.reduce((a, f) => a + Number(f.amount || 0), 0)
+    const outstanding = expected - revenue
+
+    const attendanceRate = attendance.length
+      ? (attendance.filter(a => a.status === "present").length /
+          attendance.length) *
+        100
+      : 0
+
+    const riskyStudents = students.filter((s) => {
+      const sFees = fees.filter(f => f.student_id === s.id)
+      const paid = sFees.reduce((a, f) => a + Number(f.paid || 0), 0)
+      const due = sFees.reduce((a, f) => a + Number(f.amount || 0), 0)
+
+      const sAtt = attendance.filter(a => a.student_id === s.id)
+      const attRate = sAtt.length
+        ? (sAtt.filter(a => a.status === "present").length / sAtt.length) * 100
+        : 100
+
+      return due - paid > 0 || attRate < 60
+    })
+
+    /* ---------------- HUMAN INSIGHTS ---------------- */
+
+    let summary = "School is operating normally."
+
+    if (outstanding > 0 && attendanceRate < 70) {
+      summary =
+        "⚠️ Financial pressure + attendance drop detected. The school may face instability if not addressed."
+    } else if (outstanding > 0) {
+      summary =
+        "💰 Fees collection is slowing down. Cash flow risk increasing."
+    } else if (attendanceRate < 70) {
+      summary =
+        "📉 Attendance is declining. Student engagement needs attention."
+    } else {
+      summary =
+        "✅ School performance is stable and healthy."
+    }
+
+    /* ---------------- PREDICTIONS ---------------- */
+
+    const prediction =
+      attendanceRate < 60
+        ? "Next month: possible student dropouts if no intervention is made."
+        : outstanding > 0
+        ? "Next month: delayed cash flow likely due to unpaid balances."
+        : "Next month: stable growth expected."
+
+    /* ---------------- ACTIONS ---------------- */
+
+    const actions = []
+
+    if (riskyStudents.length > 0)
+      actions.push("Call parents of at-risk students")
+
+    if (outstanding > 0)
+      actions.push("Send fee reminders immediately")
+
+    if (attendanceRate < 70)
+      actions.push("Investigate low attendance classes")
+
+    if (actions.length === 0)
+      actions.push("Maintain current performance")
+
+    return {
+      totalStudents,
+      revenue,
+      outstanding,
+      attendanceRate,
+      riskyStudents,
+      summary,
+      prediction,
+      actions,
+    }
+  }, [data])
 
   return (
     <div style={styles.wrapper}>
 
       {/* HEADER */}
       <div style={styles.header}>
-        <div style={styles.title}>
-          🧠 INTELLIGENCE CORE
-        </div>
+        <div style={styles.title}>🧠 INSIGHTS INTELLIGENCE CORE</div>
         <div style={styles.subtitle}>
-          Real-time system reasoning & predictive insights
+          Human-readable school intelligence & predictions
         </div>
       </div>
 
-      {/* KPIs */}
-      <div style={styles.grid}>
-
-        <Card
-          label="Total Students"
-          value={data.totalStudents}
-        />
-
-        <Card
-          label="High Risk"
-          value={data.highRisk.length}
-          color="#ef4444"
-        />
-
-        <Card
-          label="Total Debt"
-          value={"$" + data.totalDebt}
-          color="#f59e0b"
-        />
-
+      {/* KPI STRIP */}
+      <div style={styles.kpiGrid}>
+        <KPI label="Students" value={insight.totalStudents} color="#38bdf8" />
+        <KPI label="Revenue" value={insight.revenue} color="#22c55e" />
+        <KPI label="Outstanding" value={insight.outstanding} color="#ef4444" />
+        <KPI label="Attendance" value={`${insight.attendanceRate.toFixed(1)}%`} color="#f59e0b" />
       </div>
 
-      {/* MAIN GRID */}
-      <div style={styles.main}>
+      {/* MAIN INSIGHT */}
+      <div style={styles.panel}>
+        <div style={styles.panelTitle}>🧠 WHAT IS HAPPENING</div>
+        <div style={styles.summary}>{insight.summary}</div>
+      </div>
 
-        {/* LEFT */}
-        <Panel title="🔴 High Risk Students">
-          {data.highRisk.length === 0 && (
-            <div style={styles.empty}>
-              No high-risk students 🎉
-            </div>
-          )}
+      {/* PREDICTION */}
+      <div style={styles.panel}>
+        <div style={styles.panelTitle}>🔮 WHAT WILL HAPPEN NEXT</div>
+        <div style={styles.prediction}>{insight.prediction}</div>
+      </div>
 
-          {data.highRisk.map((s, i) => (
-            <StudentRow key={i} s={s} />
-          ))}
-        </Panel>
+      {/* ACTIONS */}
+      <div style={styles.panel}>
+        <div style={styles.panelTitle}>🎯 WHAT YOU SHOULD DO</div>
 
-        {/* RIGHT */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {insight.actions.map((a, i) => (
+          <div key={i} style={styles.action}>
+            👉 {a}
+          </div>
+        ))}
+      </div>
 
-          <Panel title="🧠 AI Insight">
-            <div style={styles.text}>
-              {data.insight}
-            </div>
-          </Panel>
+      {/* RISK STUDENTS */}
+      <div style={styles.panel}>
+        <div style={styles.panelTitle}>👨‍🎓 STUDENTS NEEDING ATTENTION</div>
 
-          <Panel title="🎯 Recommended Actions">
-            <ul style={styles.list}>
-              {data.actions.map((a, i) => (
-                <li key={i}>→ {a}</li>
-              ))}
-            </ul>
-          </Panel>
+        {insight.riskyStudents.length === 0 && (
+          <div style={styles.ok}>No at-risk students 🎉</div>
+        )}
 
-        </div>
-
+        {insight.riskyStudents.slice(0, 6).map((s, i) => (
+          <div key={i} style={styles.row}>
+            <div>{s.name}</div>
+            <div style={styles.badge}>Review</div>
+          </div>
+        ))}
       </div>
 
     </div>
   )
 }
 
-/* ---------------- UI COMPONENTS ---------------- */
+/* ---------------- UI ---------------- */
 
-function Card({ label, value, color = "#38bdf8" }) {
+function KPI({ label, value, color }) {
   return (
-    <div style={styles.card}>
-      <div style={styles.cardLabel}>{label}</div>
-      <div style={{ ...styles.cardValue, color }}>{value}</div>
-    </div>
-  )
-}
-
-function Panel({ title, children }) {
-  return (
-    <div style={styles.panel}>
-      <div style={styles.panelTitle}>{title}</div>
-      {children}
-    </div>
-  )
-}
-
-function StudentRow({ s }) {
-  const color =
-    s.risk > 80 ? "#ef4444" :
-    s.risk > 50 ? "#f59e0b" :
-    "#22c55e"
-
-  return (
-    <div style={styles.row}>
-      <div>
-        <div style={styles.name}>{s.name}</div>
-        <div style={styles.sub}>
-          Balance: ${s.balance}
-        </div>
-      </div>
-
-      <div style={{ ...styles.risk, color }}>
-        {s.risk}%
-      </div>
+    <div style={styles.kpi}>
+      <div style={styles.kpiLabel}>{label}</div>
+      <div style={{ ...styles.kpiValue, color }}>{value}</div>
     </div>
   )
 }
@@ -173,28 +199,13 @@ const styles = {
   wrapper: {
     padding: 20,
     background: "#050816",
-    minHeight: "100vh",
     color: "white",
-    fontFamily: "Inter",
-  },
-
-  loading: {
-    padding: 24,
-    color: "#60a5fa",
-    background: "#050816",
+    fontFamily: "Inter, system-ui",
     minHeight: "100vh",
-  },
-
-  error: {
-    padding: 24,
-    color: "#ef4444",
-    background: "#050816",
   },
 
   header: {
-    marginBottom: 16,
-    borderBottom: "1px solid rgba(255,255,255,0.08)",
-    paddingBottom: 10,
+    marginBottom: 14,
   },
 
   title: {
@@ -207,43 +218,34 @@ const styles = {
     opacity: 0.6,
   },
 
-  grid: {
+  kpiGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, 1fr)",
-    gap: 12,
-    marginTop: 12,
+    gridTemplateColumns: "repeat(4,1fr)",
+    gap: 10,
+    marginBottom: 14,
   },
 
-  card: {
+  kpi: {
     background: "#0f172a",
     padding: 14,
-    borderRadius: 14,
-    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: 12,
   },
 
-  cardLabel: {
+  kpiLabel: {
     fontSize: 11,
     opacity: 0.6,
   },
 
-  cardValue: {
+  kpiValue: {
     fontSize: 20,
-    fontWeight: 900,
-    marginTop: 6,
-  },
-
-  main: {
-    display: "grid",
-    gridTemplateColumns: "2fr 1fr",
-    gap: 14,
-    marginTop: 16,
+    fontWeight: 800,
   },
 
   panel: {
     background: "#0f172a",
-    borderRadius: 14,
     padding: 14,
-    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: 14,
+    marginBottom: 12,
   },
 
   panelTitle: {
@@ -252,45 +254,42 @@ const styles = {
     marginBottom: 10,
   },
 
-  text: {
-    fontSize: 13,
+  summary: {
+    fontSize: 14,
     lineHeight: 1.6,
   },
 
-  list: {
+  prediction: {
     fontSize: 13,
-    lineHeight: 1.8,
+    opacity: 0.9,
+  },
+
+  action: {
+    padding: 8,
+    background: "rgba(99,102,241,0.08)",
+    borderRadius: 10,
+    marginBottom: 6,
+    fontSize: 13,
   },
 
   row: {
     display: "flex",
     justifyContent: "space-between",
     padding: 10,
-    marginBottom: 8,
-    borderRadius: 10,
     background: "rgba(255,255,255,0.03)",
+    borderRadius: 10,
+    marginBottom: 6,
   },
 
-  name: {
-    fontWeight: 700,
-  },
-
-  sub: {
+  badge: {
     fontSize: 11,
+    padding: "3px 8px",
+    background: "#f59e0b",
+    borderRadius: 999,
+  },
+
+  ok: {
     opacity: 0.6,
-  },
-
-  risk: {
-    fontWeight: 900,
-  },
-
-  empty: {
     fontSize: 13,
-    opacity: 0.6,
   },
 }
-
-
-
-
-
