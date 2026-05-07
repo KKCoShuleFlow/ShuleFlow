@@ -60,6 +60,7 @@ import InsightsDashboard from "./pages/InsightsDashboard"
 import SystemhealthDashboard from "./pages/SystemhealthDashboard"
 import SyncStatusDashboard from "./pages/SyncStatusDashboard"
 import SettingsDashboard from "./pages/SettingsDashboard"
+import AppLayout from "./components/AppLayout/layout"
 
 export default function App() {
   return (
@@ -76,6 +77,7 @@ export default function App() {
         <Route path="/system" element={<SystemhealthDashboard />} />
         <Route path="/sync" element={<SyncStatusDashboard />} />
         <Route path="/settings" element={<SettingsDashboard />} />
+        <Route path="/layout" element={<AppLayout />} />
       </Routes>
     </AppLayout>
   )
